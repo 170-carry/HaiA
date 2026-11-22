@@ -11,8 +11,10 @@ window.sample = (body, id, fromMe = false, contact = chat, minutesAgo = 0, extra
   rows.push(msg); events.get('chat.new_message')?.(msg); return msg;
 };
 window.require = name => name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;}} : null;
+window.tags = [{id:'1',name:'新客户',hexColor:'#407776'}];
+window.statuses = [{id:'vivian@c.us',contact:{name:'采购 · Vivian'},totalCount:1,unreadCount:1,t:now,msgs:{getModelsArray:()=>[{id:{_serialized:'false_status@broadcast_S1_vivian@c.us'},t:now,type:'chat',body:'本周新品到货',backgroundColor:0xff145347}]}}];
 window.WPP = {
-  whatsapp:{MsgStore:{getMessagesById:async ids=>({messages:(window.restoredRows || []).filter(m=>ids.includes(m.id._serialized))}),on:(name,fn)=>events.set('model:'+name,fn)}},
+  whatsapp:{StatusV3Store:{getModelsArray:()=>window.statuses},MsgStore:{getMessagesById:async ids=>({messages:(window.restoredRows || []).filter(m=>ids.includes(m.id._serialized))}),on:(name,fn)=>events.set('model:'+name,fn)}},
   on: (name, cb) => events.set(name,cb),
   loader: {isReady:true,onReady:cb=>cb()},
   conn: {
@@ -23,7 +25,8 @@ window.WPP = {
     },
     cancelLinkDeviceCode(){},isAuthenticated:()=>!!localStorage.owner,isMainReady:()=>!!localStorage.owner,getMyUserId:()=>localStorage.owner},
   group:{create:async(name,members)=>{const id='new-group@g.us';chats.set(id,{id,formattedTitle:name,t:now,groupMetadata:{subject:name}});
-      return {gid:{_serialized:id},participants:Object.fromEntries(members.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]))};},ensureGroup:async id=>chats.get(id), getParticipants:async()=>[{id:'16505550102@c.us',isAdmin:true}],
+      return {gid:{_serialized:id},participants:Object.fromEntries(members.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]))};},ensureGroup:async id=>chats.get(id), getParticipants:async()=>[{id:'16505550102@c.us',isAdmin:true},{id:localStorage.owner,isAdmin:true},...(window.added || []).map(id=>({id}))],
+    addParticipants:async(_g,ids)=>{window.added=ids.slice(0,1);return Object.fromEntries(ids.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]));},removeParticipants:async(_g,ids)=>{window.added=(window.added || []).filter(id=>!ids.includes(id));},promoteParticipants:async()=>{},demoteParticipants:async()=>{},
     setSubject:async(id,name)=>{chats.get(id).groupMetadata.subject=name;return true;},setDescription:async()=>false},
   contact: {getProfilePictureUrl: async id => {
     if (id !== localStorage.owner && id !== 'vivian@c.us') return null;
@@ -40,6 +43,11 @@ window.WPP = {
     getStatus:async()=>'工作日 9:00–18:00 在线',getCommonGroups:async()=>['fixture@g.us'],
     getBusinessProfile:async()=>({description:'精密五金配件采购',categories:[{localized_display_name:'批发'}],email:'buyer@example.test',website:['https://example.test']}),
     save:async(id,name)=>{const c=chats.get(id);c.saved=name;c.formattedTitle=name;},remove:async id=>{const c=chats.get(id);delete c.saved;c.formattedTitle='+65 8123 4567';}},
+  labels:{getAllLabels:async()=>window.tags,addNewLabel:async name=>{const tag={id:String(window.tags.length+1),name,hexColor:'#4e729a'};window.tags.push(tag);return tag;},
+    addOrRemoveLabels:async(id,o)=>{const c=chats.get(id);c.labels=(c.labels || []).filter(l=>l!==o.labelId);if(o.type==='add')c.labels.push(o.labelId);}},
+  status:{get:id=>window.statuses.find(s=>s.id===id),sendTextStatus:async text=>{window.posted=text;}},
+  call:{enableCallInterface:async()=>{},offer:async(to,o)=>{events.get('call.outgoing_call')({id:'out-1',peerJid:to,isVideo:!!o.isVideo});},
+    accept:async id=>{events.get('call.accepted')({id});},end:async id=>{events.get('call.ended')({id});},reject:async id=>{window.rejected=id;events.get('call.ended')({id});},setMute:async()=>true},
   blocklist:{isBlocked:id=>!!chats.get(id)?.blocked,blockContact:async id=>{chats.get(id).blocked=true;},unblockContact:async id=>{chats.get(id).blocked=false;}},
   chat: {
     getMessageById:async id=>rows.find(row=>row.id._serialized===id),
@@ -63,6 +71,11 @@ window.WPP = {
     getReactions:async id=>({reactions:reacted.has(id) ? [{aggregateEmoji:reacted.get(id),hasReactionByMe:true,senders:[{}]}] : []}),
     deleteMessage:async(_chat,id,_media,revoke)=>({id,isRevoked:!!revoke,isDeleted:!revoke}),
     editMessage:async(id,text)=>{ rows.find(r=>r.id._serialized===id).body=text; return {id}; },
+    sendLocationMessage:async(chatId,o)=>({id:window.sample('',  'true_'+chatId+'_LOC'+rows.length,true,chats.get(chatId),0,{type:'location',lat:Number(o.lat),lng:Number(o.lng),loc:o.name}).id._serialized}),
+    sendVCardContactMessage:async(chatId,c)=>({id:window.sample('BEGIN:VCARD\nFN:'+c.name+'\nTEL;waid='+c.id.split('@')[0]+':+'+c.id.split('@')[0]+'\nEND:VCARD','true_'+chatId+'_VC'+rows.length,true,chats.get(chatId),0,{type:'vcard',vcardFormattedName:c.name}).id._serialized}),
+    sendCreatePollMessage:async(chatId,name,options)=>({id:window.sample('','true_'+chatId+'_POLL'+rows.length,true,chats.get(chatId),0,{type:'poll_creation',pollName:name,pollOptions:options.map(o=>({name:o}))}).id._serialized}),
+    getVotes:async()=>({votes:[{selectedOptions:[1]},{selectedOptions:[1]},{selectedOptions:[0]}]}),
+    starMessage:async(id,star)=>({id,star}), markIsUnread:async id=>{const c=chats.get(id);c.unreadCount=-1;events.get('chat.unread_count_changed')?.({chat:c,unreadCount:-1});},
     forwardMessage:async(to,id)=>{ window.forwarded=[to,id]; return true; },
     markIsComposing:async id=>{ window.composing=id; }, markIsPaused:async()=>{},
     mute:async id=>{chats.get(id).isMuted=true;},unmute:async id=>{chats.get(id).isMuted=false;},pin:async(id,on)=>{chats.get(id).pin=on?1:0;},archive:async(id,on)=>{chats.get(id).archive=on;}

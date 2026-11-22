@@ -74,3 +74,8 @@
 #chat-menu button { display:flex; align-items:center; gap:9px; width:100%; padding:7px 8px; text-align:left; border-radius:5px; }
 #chat-menu button svg { width:15px; height:15px; }
 #chat-menu button:hover, #chat-menu button:focus-visible { background:#444651; color:white; }
+.feed-top { display:flex; gap:2px; padding-inline:9px 5px; }
+.feed-top .search { flex:1; min-width:0; }
+.feed-top .icon-button { flex:none; width:30px; height:32px; border-radius:7px; }
+.feed-top .icon-button svg { width:17px; height:17px; }
+.feed-top .icon-button:is(:hover,:focus-visible) { color:var(--ink); background:var(--soft); }

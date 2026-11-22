@@ -9,7 +9,7 @@ function messageReceipt(ack) {
 // Web addresses in message text open in the system browser.
 function richText(node, text) {
   let last = 0;
-  for (const match of text.matchAll(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/gi)) {
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"'，。！？；：、]+[^\s<>"'，。！？；：、.,;:!?)\]]/gi)) {
     node.append(text.slice(last,match.index));
     const link = el('button','text-link',match[0]);
     link.type = 'button'; link.dataset.url = match[0];

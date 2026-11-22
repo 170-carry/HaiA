@@ -11,7 +11,7 @@ window.relayGroupTools = (() => {
     const mine = WPP.conn.getMyUserId()?.toString();
     return {manage:members.some(p=>p.id.toString() === mine && (p.isAdmin || p.isSuperAdmin)), subject:meta?.subject || chat.formattedTitle || '',description:meta?.desc || '',
       editable:{subject:!!meta?.canSetSubject?.(),description:!!meta?.canSetDescription?.()},
-      members:members.map(p=>({id:p.id.toString(),name:window.relayGroupMessage.sender({author:p.id}).name,admin:!!(p.isAdmin || p.isSuperAdmin)}))};
+      members:members.map(p=>({self:p.id.toString() === mine,id:p.id.toString(),name:window.relayGroupMessage.sender({author:p.id}).name,admin:!!(p.isAdmin || p.isSuperAdmin)}))};
   }
   async function save(id,field,value) {
     const chat=await WPP.group.ensureGroup(id);

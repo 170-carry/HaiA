@@ -23,7 +23,7 @@ const groupPanel = (() => {
           item.onclick=()=>{ const id=account;dialog.close();run(()=>api.openChat(id,row.chat)); };
         } else {
           if (row.admin) item.append(el('small','','管理员'));
-          if (manage) {
+          if (manage && !row.self) {
             const tools=el('span','member-tools');
             for (const [label,action,danger] of [[row.admin ? '取消管理员' : '设为管理员',row.admin ? 'demote' : 'promote'],['移除','remove',true]]) {
               const button=el('button',danger ? 'danger-item' : '',label); button.type='button';

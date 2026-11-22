@@ -61,6 +61,7 @@ function renderFeed(state, open) {
   if (focus) Array.from(list.querySelectorAll('button')).find(b=>b.dataset.message===focus)?.focus({preventScroll:true});
   const empty = document.getElementById('feed-empty');
   empty.hidden = !!matches;
-  empty.textContent = q ? '没有匹配的会话' : unreadOnly ? '没有未读会话' : '暂无会话';
+  const archived = document.getElementById('filter-archived').getAttribute('aria-pressed') === 'true';
+  empty.textContent = q ? '没有匹配的会话' : unreadOnly ? '没有未读会话' : archived ? '没有已归档的会话' : '暂无会话';
   document.getElementById('moreFeed').hidden = !(state.feedMore || page.count > page.messages.length);
 }
