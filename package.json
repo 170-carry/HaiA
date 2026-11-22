@@ -1,7 +1,7 @@
 {
   "name": "haia",
   "productName": "HaiA",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "A local multi-account WhatsApp desktop inbox",
   "author": "HaiA",
   "private": true,
@@ -39,7 +39,7 @@
       "identity": "-",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "HaiA 需要使用麦克风录制 WhatsApp 语音消息。",
-        "NSCameraUsageDescription": "Relay Desk 需要使用摄像头进行 WhatsApp 视频通话。"
+        "NSCameraUsageDescription": "HaiA 需要使用摄像头进行 WhatsApp 视频通话。"
       }
     },
     "win": {

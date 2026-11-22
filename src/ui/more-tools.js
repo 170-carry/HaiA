@@ -170,3 +170,32 @@ const callBar = (() => {
     draw();
   }};
 })();
+// Right-click menu on a conversation row.
+const chatMenu = (() => {
+  const menu = get('chat-menu');
+  function open(chat, row, event) {
+    const set = (key,value,done) => () => { menu.hidePopover(); run(async()=>{ await api.chatSetting(chat.accountId,chat.chat,key,value); if (done) warning(done); }); };
+    const items = [
+      ['pin',chat.pinned ? '取消置顶' : '置顶',set('pinned',!chat.pinned)],
+      ['mute',chat.muted ? '取消静音' : '静音通知',set('muted',!chat.muted)],
+      ['archive',chat.archived ? '取消归档' : '归档',set('archived',!chat.archived,chat.archived ? '已移回会话列表' : '已归档，可在「已归档」中查看')],
+      ['chat',chat.unreadCount ? '标为已读' : '标为未读',set('unread',!chat.unreadCount)]
+    ].map(([symbol,label,work]) => {
+      const button = el('button'); button.type = 'button'; button.setAttribute('role','menuitem');
+      button.append(icon(symbol),label); button.onclick = work; return button;
+    });
+    menu.replaceChildren(el('strong','chat-menu-title',chat.title),...items);
+    menu.showPopover();
+    const box = row.getBoundingClientRect(), own = menu.getBoundingClientRect();
+    const x = event.clientX || box.left + 40, y = event.clientY || box.bottom;
+    menu.style.left = Math.max(8,Math.min(x,innerWidth-own.width-8))+'px';
+    menu.style.top = Math.max(8,Math.min(y,innerHeight-own.height-8))+'px';
+    items[0].focus({preventScroll:true});
+  }
+  for (const id of ['chat-menu','attach-menu']) get(id).addEventListener('keydown',event => {
+    const buttons = [...get(id).querySelectorAll('button')], i = buttons.indexOf(document.activeElement);
+    const step = {ArrowDown:1,ArrowUp:-1}[event.key];
+    if (step) { event.preventDefault(); buttons[(i+step+buttons.length)%buttons.length].focus(); }
+  });
+  return {open};
+})();

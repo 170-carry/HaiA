@@ -35,7 +35,10 @@
 .row.unread .snippet { color:#e1e2eb; }
 .row-preview, .row-top { display:grid; grid-template-columns:minmax(0,1fr) max-content; min-width:0; align-items:center; gap:6px; }
 .row-top:has(.group-tag) { grid-template-columns:minmax(0,max-content) max-content minmax(0,1fr); }
-.row-top:has(.group-tag) time { justify-self:end; }
+.row-top:has(.group-tag) .row-stamp { justify-self:end; }
+.row-stamp { display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.row-flag svg { width:12px; height:12px; color:var(--muted); }
+.feed-filters #archived-count { margin-left:auto; color:var(--muted); font-size:12px; }
 .row-preview { min-height:19px; }
 .snippet, .row-top strong { min-width:0; }
 .row-top time, .conversation-unread { white-space:nowrap; }

@@ -69,3 +69,8 @@
 .member-add input { flex:1; min-width:0; }
 .member-add .primary { padding:7px 12px; border-radius:7px; font-size:12px; box-shadow:none; white-space:nowrap; }
 @media (prefers-reduced-motion:reduce) { .call-row.ringing .call-icon { animation:none; } }
+#chat-menu { position:fixed; inset:auto; margin:0; padding:5px; min-width:168px; border-radius:9px; background:#24252a; border:1px solid var(--line); color:var(--ink); box-shadow:var(--shadow); }
+.chat-menu-title { display:block; padding:4px 8px 6px; margin-bottom:3px; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#chat-menu button { display:flex; align-items:center; gap:9px; width:100%; padding:7px 8px; text-align:left; border-radius:5px; }
+#chat-menu button svg { width:15px; height:15px; }
+#chat-menu button:hover, #chat-menu button:focus-visible { background:#444651; color:white; }

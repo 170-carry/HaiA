@@ -24,12 +24,14 @@ window.createRelayIndex = function (latestMessages, format, enqueue) {
           const title = model.formattedTitle || model.name || model.contact?.pushname || chat.split('@')[0];
           const time = Number(model.t || 0) * 1000;
           const phone = contactPhoneDigits(chat, model.contact?.phoneNumber, model.contact?.formattedUser);
-          const stamp = JSON.stringify([title,phone,time,idOf(model.lastReceivedKey)]);
+          const mute = model.muteExpiration ?? model.mute?.expiration;
+          const flags = {pinned:Boolean(model.pin), archived:Boolean(model.archive), muted:Boolean(model.isMuted || mute === -1 || mute > Date.now()/1000)};
+          const stamp = JSON.stringify([title,phone,time,idOf(model.lastReceivedKey),flags]);
           if (known.get(chat) !== stamp) {
             known.set(chat, stamp);
             queue.set(chat, {model});
             retry.delete(chat);
-            directory.push({chat,title,phone,time});
+            directory.push({chat,title,phone,time,...flags});
           }
           if ((retry.get(chat)?.at ?? Infinity) <= Date.now()) queue.set(chat,{model,before:retry.get(chat).before});
           updateUnread(chat, model.unreadCount);

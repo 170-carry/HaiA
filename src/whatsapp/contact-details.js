@@ -40,6 +40,7 @@ window.relayContact = (() => {
     if (key === 'muted') await (value ? WPP.chat.mute(chatId,{expiration:-1}) : WPP.chat.unmute(chatId));
     else if (key === 'pinned') await WPP.chat.pin(chatId,value);
     else if (key === 'archived') await WPP.chat.archive(chatId,value);
+    else if (key === 'unread') await (value ? WPP.chat.markIsUnread(chatId) : WPP.chat.markIsRead(chatId));
     else if (key === 'blocked') await (value ? WPP.blocklist.blockContact(chatId) : WPP.blocklist.unblockContact(chatId));
     else throw new Error('未知设置');
     return true;

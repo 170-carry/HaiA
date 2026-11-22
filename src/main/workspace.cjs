@@ -17,7 +17,7 @@ class Workspace {
     this.feedScope = null;
     this.feedQuery = '';
     this.feedLimit = 100;
-    this.unreadOnly = false;
+    this.filter = 'all';
     this.limit = 100;
     this.thread = null;
     this.epoch = 0;
@@ -33,9 +33,9 @@ class Workspace {
     const digits = phoneSearchDigits(query);
     const owners = new Map(this.accounts.items.map(a => [a.id,a.name]));
     const matches = query ? m => matchesContactQuery(query,digits,m.phone || contactPhoneDigits(m.chat),[m.title,m.text,owners.get(m.accountId)]) : null;
-    const feed = this.inbox.conversations.page(this.feedLimit, this.feedScope, this.unreadOnly, matches);
+    const feed = this.inbox.conversations.page(this.feedLimit, this.feedScope, this.filter === 'unread', matches, this.filter === 'archived');
     const feedMore = this.feedSources().some(s => s.more);
-    return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
+    return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, feedFilter:this.filter, archivedCount:this.inbox.conversations.archivedCount(this.feedScope), calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
       const s = this.sessions.get(a.id);
       const phone = s?.status === 'online' && /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(s.identity || '');
       return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError };
@@ -284,7 +284,7 @@ class Workspace {
   async microphone(video) {
     if (process.platform !== 'darwin') return;
     const allowed = await systemPreferences.askForMediaAccess('microphone') && (!video || await systemPreferences.askForMediaAccess('camera'));
-    if (!allowed) throw new Error('请在系统设置中允许 Relay Desk 使用麦克风' + (video ? '和摄像头' : ''));
+    if (!allowed) throw new Error('请在系统设置中允许 HaiA 使用麦克风' + (video ? '和摄像头' : ''));
   }
   async callStart(accountId, chat, video) {
     const {session} = this.current(accountId,chat);
@@ -393,10 +393,13 @@ class Workspace {
     if (this.active === accountId && this.thread?.chat === chat) this.thread.title = title;
     this.publish();
   }
+  // Works for any conversation in the list, not only the one that is open.
   async chatSetting(accountId, chat, key, value) {
-    const {session} = this.current(accountId,chat);
-    if (!['muted','pinned','archived','blocked'].includes(key) || (key === 'blocked' && chat.endsWith('@g.us'))) throw new Error('无法修改此设置');
+    const session = this.online(accountId);
+    if (typeof chat !== 'string' || !this.inbox.conversations.find(accountId,chat)) throw new Error('会话不存在');
+    if (!['muted','pinned','archived','blocked','unread'].includes(key) || (key === 'blocked' && chat.endsWith('@g.us'))) throw new Error('无法修改此设置');
     await session.call('chatSetting', chat, key, value === true);
+    if (['muted','pinned','archived'].includes(key)) { this.inbox.conversations.setFlag(accountId,chat,key,value === true); this.publish(); }
   }
   async typing(accountId, chat, active) {
     const {session} = this.current(accountId,chat);
@@ -438,7 +441,7 @@ class Workspace {
     this.publish();
   }
   filterUnread(value) {
-    this.unreadOnly = value === true;
+    this.filter = value === true || value === 'unread' ? 'unread' : value === 'archived' ? 'archived' : 'all';
     this.feedLimit = 100;
     this.publish();
   }

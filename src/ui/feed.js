@@ -26,7 +26,12 @@ function renderFeed(state, open) {
     row.classList.toggle('unread', m.unreadCount > 0);
     row.setAttribute('aria-current', String(selected));
     const words = el('span','words'), top = el('span','row-top');
-    top.append(el('strong','',m.title),el('time','',m.time ? timeFormat.format(m.time) : ''));
+    const stamp = el('span','row-stamp');
+    for (const [flag,symbol,label] of [['pinned','pin','已置顶'],['muted','mute','已静音']]) if (m[flag]) {
+      const mark = el('i','row-flag'); mark.title = label; mark.append(icon(symbol)); stamp.append(mark);
+    }
+    stamp.append(el('time','',m.time ? timeFormat.format(m.time) : ''));
+    top.append(el('strong','',m.title),stamp);
     const preview = el('span','row-preview');
     const group = m.chat.endsWith('@g.us');
     if (group) top.firstChild.after(el('span','group-tag','群聊'));
@@ -49,6 +54,7 @@ function renderFeed(state, open) {
       face.append(from);
     }
     row.append(face,words); row.onclick = ()=>open(m);
+    row.oncontextmenu = event => { event.preventDefault(); chatMenu.open(m,row,event); };
     items.append(row);
   }
   list.replaceChildren(items);

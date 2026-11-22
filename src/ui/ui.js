@@ -38,6 +38,8 @@ function render(s) {
   const unread = scope ? scope.unread : s.accounts.reduce((sum, a) => sum + a.unread,0);
   get('scope-unread').hidden = !unread;
   get('scope-unread').textContent = String(unread);
+  get('archived-count').hidden = !s.archivedCount;
+  get('archived-count').textContent = String(s.archivedCount || '');
   const dock = get('dock-avatar');
   dock.className = 'dock-icon ' + (scope ? accountTones(s.accounts).get(scope.id) : '');
   dock.replaceChildren(scope ? avatarPhotos.face(scope.id,'self') : icon('inbox'));
@@ -117,11 +119,10 @@ get('newAccount').onsubmit = e=>{
   get('dialog').close(); run(()=>api.add(name));
 };
 get('send').title = api.platform === 'darwin' ? '发送消息（⌘ + Enter）' : '发送消息（Ctrl + Enter）';
-for (const mode of ['all','unread']) get('filter-' + mode).onclick = () => {
-  get('filter-all').setAttribute('aria-pressed', String(mode === 'all'));
-  get('filter-unread').setAttribute('aria-pressed', String(mode === 'unread'));
+for (const mode of ['all','unread','archived']) get('filter-' + mode).onclick = () => {
+  for (const other of ['all','unread','archived']) get('filter-' + other).setAttribute('aria-pressed', String(mode === other));
   if (state) renderFeed(state,openMessage);
-  run(()=>api.filterUnread(mode === 'unread'));
+  run(()=>api.filterUnread(mode));
 };
 get('reply').oninput = ()=>{
   get('send').disabled = !canSend(state?.accounts.find(a=>a.id===state.active));
