@@ -35,6 +35,7 @@ const messageActions = (() => {
   function openMore(message,anchor) {
     const items = [item('reply','回复',()=>{ menu.hidePopover(); composerExtras.reply(message); })];
     items.push(item('forward','转发',()=>{ menu.hidePopover(); forwardPicker.open(message); }));
+    items.push(item('star',message.starred ? '取消星标' : '星标',()=>act(()=>api.star(message.accountId,message.chat,message.id,!message.starred))));
     if (message.text && (!message.media || message.media.caption)) items.push(item('copy','复制文字',()=>act(async()=>{
       await navigator.clipboard.writeText(message.text); warning('已复制');
     })));
@@ -82,6 +83,8 @@ const messageActions = (() => {
   get('bubbles').addEventListener('click',event => {
     const row = event.target.closest('.message[data-id]'), message = row && find(row.dataset.id);
     if (!message) return;
+    const url = event.target.closest('.text-link')?.dataset.url;
+    if (url) { run(()=>api.openExternal(url)); return; }
     const tool = event.target.closest('[data-act]'), chip = event.target.closest('.reactions button'), quote = event.target.closest('.quote');
     if (chip) react(message,chip.dataset.emoji);
     else if (quote) {

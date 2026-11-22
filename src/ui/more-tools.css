@@ -1,0 +1,71 @@
+.text-link { display:inline; padding:0; color:#9fd6ff; text-decoration:underline; text-align:left; font:inherit; overflow-wrap:anywhere; user-select:text; }
+.link-card { display:flex; gap:9px; width:100%; margin:0 0 5px; padding:7px; border-radius:8px; background:#0000002e; color:inherit; text-decoration:none; }
+.link-card:hover { background:#00000047; }
+.link-card img { width:58px; height:58px; flex:none; border-radius:6px; object-fit:cover; }
+.link-card > span { min-width:0; display:grid; align-content:center; gap:1px; }
+.link-card strong { font-size:13px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.link-card span span { font-size:12px; color:#d3d9d8; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.link-card small { font-size:11px; color:#b9c4c1; }
+.poll { display:grid; gap:5px; min-width:220px; margin-bottom:4px; }
+.poll > strong { font-size:14px; margin-bottom:2px; }
+.poll-option { position:relative; display:flex; justify-content:space-between; gap:10px; padding:6px 9px; border-radius:7px; background:#0000002e; overflow:hidden; font-size:13px; }
+.poll-fill { position:absolute; inset:0 auto 0 0; background:#5865f266; }
+.poll-option span, .poll-option b { position:relative; }
+.poll small { font-size:11px; color:#c3ccca; }
+.starred { color:#f5c84b; }
+#attach-menu { position:fixed; inset:auto; margin:0; padding:5px; min-width:160px; border-radius:9px; background:#24252a; border:1px solid var(--line); color:var(--ink); box-shadow:var(--shadow); }
+#attach-menu button { display:flex; align-items:center; gap:9px; width:100%; padding:8px; text-align:left; border-radius:5px; }
+#attach-menu button svg { width:16px; height:16px; }
+#attach-menu button:hover, #attach-menu button:focus-visible { background:#444651; color:white; }
+#special-fields label { display:block; margin-bottom:10px; }
+#special-fields input:not([type=checkbox]), #special-fields textarea { display:block; width:100%; margin-top:5px; }
+#special-fields textarea { min-height:92px; resize:vertical; }
+#special-fields input[type=checkbox] { width:16px; height:16px; appearance:auto; accent-color:var(--accent); }
+#special-hint, #status-note { font-size:12px; }
+#special-error { color:#ffb5ac; font-size:12px; }
+#status-dialog { width:min(470px,94vw); }
+#status-owner { display:block; width:100%; margin-bottom:10px; padding:8px; color:var(--ink); background:var(--control); border-radius:7px; border:1px solid var(--control-edge); }
+#status-text { display:block; width:100%; min-height:58px; resize:vertical; }
+.status-compose { display:flex; align-items:center; gap:8px; margin:8px 0 4px; }
+.status-compose button { padding:7px 12px; border-radius:7px; font-size:12px; font-weight:600; background:#464852; }
+.status-compose .primary { margin-left:auto; background:var(--accent); color:white; box-shadow:none; }
+#status-image-name { min-width:0; font-size:12px; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#status-note { margin:10px 0 6px; }
+#status-list { max-height:42vh; overflow:auto; }
+.status-row .avatar { outline:2px solid #5f6170; outline-offset:2px; }
+.status-row.unseen .avatar { outline-color:#43a36c; }
+.status-heading { font-size:14px; margin:8px 0; }
+.status-item { display:grid; gap:6px; padding:9px; margin-bottom:7px; border-radius:9px; background:var(--soft); }
+.status-item img, .status-item video { max-width:100%; max-height:300px; border-radius:7px; }
+.status-item time { font-size:11px; color:var(--muted); }
+.status-text { white-space:pre-wrap; overflow-wrap:anywhere; }
+.status-text.plain { padding:18px 12px; border-radius:7px; text-align:center; font-size:16px; background:var(--status-color,#145347); color:white; }
+.status-media { padding:22px; border-radius:7px; background:#0003; color:var(--accent-ink); }
+#call-bar { position:relative; z-index:2; display:grid; gap:1px; background:var(--line); }
+.call-row { display:flex; align-items:center; gap:11px; padding:8px 16px; background:#1f3d33; }
+.call-row.ringing { background:#2f3470; }
+.call-icon { flex:none; display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:#ffffff1f; }
+.call-icon svg { width:16px; height:16px; }
+.call-row.ringing .call-icon { animation:recording-pulse 1.1s ease-in-out infinite; }
+.call-words { flex:1; min-width:0; display:grid; }
+.call-words strong, .call-words small { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.call-words small { font-size:12px; color:#d0d6e6; font-variant-numeric:tabular-nums; }
+.call-buttons { display:flex; gap:6px; flex:none; }
+.call-buttons button { padding:6px 13px; border-radius:16px; font-size:12px; font-weight:600; background:#ffffff24; }
+.call-buttons button:hover { filter:brightness(1.15); }
+.call-buttons .accept { background:#2f9e63; color:white; }
+.call-buttons .hangup { background:#da3744; color:white; }
+.label-chips { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:5px; margin-top:3px; }
+.label-chip { padding:2px 9px; border-radius:11px; font-size:12px; border:1px solid var(--label); color:var(--muted); }
+.label-chip::before { content:""; display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:var(--label); }
+.label-chip[aria-pressed=true] { background:color-mix(in srgb,var(--label) 35%,transparent); color:var(--ink); }
+.label-new { width:86px; padding:2px 8px; border-radius:11px; font-size:12px; background:transparent; border:1px dashed #6a6c78; }
+.member-tools { margin-left:auto; display:flex; gap:4px; flex:none; opacity:0; }
+.group-row:hover .member-tools, .group-row:focus-within .member-tools { opacity:1; }
+.member-tools button { padding:3px 8px; border-radius:6px; font-size:11px; background:#464852; }
+.member-tools .danger-item { color:#ffaaa3; }
+.group-row small + .member-tools { margin-left:8px; }
+.member-add { display:flex; gap:6px; margin:8px 0; }
+.member-add input { flex:1; min-width:0; }
+.member-add .primary { padding:7px 12px; border-radius:7px; font-size:12px; box-shadow:none; white-space:nowrap; }
+@media (prefers-reduced-motion:reduce) { .call-row.ringing .call-icon { animation:none; } }

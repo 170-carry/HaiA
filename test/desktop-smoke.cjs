@@ -293,7 +293,7 @@ async function until(fn) {
     await call('edit',me,G,answer.id,'改过的回复');
     await until(()=>ui("[...document.querySelectorAll('.message')].some(n=>n.querySelector('.message-text').textContent==='改过的回复' && n.querySelector('.edited'))"));
     await ui("[...document.querySelectorAll('.message')].find(n=>n.dataset.id==="+JSON.stringify(answer.id)+").querySelector('[data-act=more]').click()");
-    assert.deepEqual(await ui("get('message-menu').matches(':popover-open') && [...get('message-menu').querySelectorAll('button')].map(b=>b.textContent)"),['回复','转发','复制文字','编辑','撤回','为我删除']);
+    assert.deepEqual(await ui("get('message-menu').matches(':popover-open') && [...get('message-menu').querySelectorAll('button')].map(b=>b.textContent)"),['回复','转发','星标','复制文字','编辑','撤回','为我删除']);
     if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'message-actions.png'),(await shell.capturePage()).toPNG()); }
     await ui("get('message-menu').querySelector('button').click()");
     assert.equal(await ui("!get('reply-context').hidden && get('context-text').textContent"),'改过的回复');

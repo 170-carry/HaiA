@@ -7,7 +7,7 @@ const groupPanel = (() => {
     account=id; chat=next;
     get('group-directory').hidden=get('group-settings').hidden=!chat?.endsWith('@g.us');
   }
-  function listRows(rows,groups) {
+  function listRows(rows,groups,manage) {
     const search=el('input','group-search'); search.type='search'; search.placeholder=groups ? '搜索群名称' : '搜索成员';
     search.setAttribute('aria-label',search.placeholder);
     const list=el('div','group-rows');
@@ -21,13 +21,41 @@ const groupPanel = (() => {
         if (groups) {
           if (row.chat===chat) item.append(el('small','','当前群聊'));
           item.onclick=()=>{ const id=account;dialog.close();run(()=>api.openChat(id,row.chat)); };
-        } else if (row.admin) item.append(el('small','','管理员'));
+        } else {
+          if (row.admin) item.append(el('small','','管理员'));
+          if (manage) {
+            const tools=el('span','member-tools');
+            for (const [label,action,danger] of [[row.admin ? '取消管理员' : '设为管理员',row.admin ? 'demote' : 'promote'],['移除','remove',true]]) {
+              const button=el('button',danger ? 'danger-item' : '',label); button.type='button';
+              button.onclick=()=>change(action,[row.id],button);
+              tools.append(button);
+            }
+            item.append(tools);
+          }
+        }
         frag.append(item);
       }
       list.replaceChildren(frag);
       status.textContent=list.children.length ? '' : '没有匹配的结果';
     };
-    search.oninput=draw; panel.append(search,list); draw();
+    search.oninput=draw; panel.append(search);
+    if (manage) {
+      const form=el('form','member-add'), input=el('input'), add=el('button','primary','添加成员');
+      input.placeholder='手机号（含国家区号），多个用逗号分隔'; input.setAttribute('aria-label','要添加的成员手机号');
+      form.append(input,add);
+      form.onsubmit=event=>{ event.preventDefault(); const phones=input.value.split(/[,，;；\n]+/).map(p=>p.trim()).filter(Boolean); if (phones.length) change('add',phones,add); };
+      panel.append(form);
+    }
+    panel.append(list); draw();
+  }
+  async function change(action,members,button) {
+    const ticket=revision; button.disabled=true;
+    try {
+      const failed=await api.groupMembers(account,chat,action,members);
+      if (ticket!==revision) return;
+      await open('members');
+      status.textContent=failed?.length ? '未能添加：'+failed.map(p=>'+'+p).join('、')+'（对方可能限制了被拉入群聊）' : '成员已更新';
+    } catch(e) { if (ticket===revision) { status.textContent=translationError(e); button.disabled=false; } }
   }
   function settings(info,ticket) {
     for (const [field,title,limit] of [['subject','群名称',100],['description','群描述',2048]]) {
@@ -67,7 +95,7 @@ const groupPanel = (() => {
       if(ticket!==revision || !dialog.open)return;
       status.textContent='';
       if(tab==='settings') settings(result,ticket);
-      else listRows(tab==='list' ? result : result.members,tab==='list');
+      else listRows(tab==='list' ? result : result.members,tab==='list',tab==='members' && result.manage);
     } catch(e){if(ticket===revision && dialog.open) status.textContent=translationError(e);}
   }
   dialog.onclose=()=>{revision++;panel.replaceChildren();};

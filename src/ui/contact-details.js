@@ -1,13 +1,14 @@
 // Contact info as WhatsApp shows it, with the remark and chat switches editable in place.
 const contactDetails = (() => {
   const box = get('profile-details'), dialog = get('remark-dialog');
-  let key = null, target = null, info = null, failed = false;
+  let key = null, target = null, info = null, failed = false, labels = null;
   const current = () => target && state?.active === target.account && state.thread?.chat === target.chat;
   async function load() {
     const request = key;
     try {
       const result = await api.contactInfo(target.account,target.chat);
-      if (request === key) { info = result; failed = false; }
+      const tags = await api.chatLabels(target.account,target.chat).catch(()=>null);
+      if (request === key) { info = result; labels = tags; failed = false; }
     } catch { if (request === key) failed = true; }
     if (request === key) draw();
   }
@@ -37,6 +38,23 @@ const contactDetails = (() => {
       } else run(work);
     };
     return button;
+  }
+  // Labels exist on WhatsApp Business accounts only; other accounts return none and the section stays hidden.
+  function labelBox() {
+    const wrap = el('div','detail');
+    wrap.append(el('span','detail-label','标签'));
+    const chips = el('div','label-chips');
+    const change = (id,on,name) => run(async()=>{ await api.setLabel(target.account,target.chat,id,on,name); labels = await api.chatLabels(target.account,target.chat).catch(()=>labels); draw(); });
+    for (const label of labels) {
+      const chip = el('button','label-chip',label.name);
+      chip.type = 'button'; chip.setAttribute('aria-pressed',String(label.on)); chip.style.setProperty('--label',label.color);
+      chip.onclick = () => change(label.id,!label.on);
+      chips.append(chip);
+    }
+    const input = el('input','label-new'); input.placeholder = '+ 新标签'; input.maxLength = 100; input.setAttribute('aria-label','新标签名称，按回车创建');
+    input.onkeydown = event => { if (event.key === 'Enter' && input.value.trim()) { event.preventDefault(); change('',true,input.value.trim()); } };
+    chips.append(input); wrap.append(chips);
+    return wrap;
   }
   function draw() {
     const group = target?.chat.endsWith('@g.us');
@@ -76,7 +94,7 @@ const contactDetails = (() => {
     const switches = el('div','switches');
     switches.append(toggle('bell','静音通知','muted'),toggle('pin','置顶聊天','pinned'),toggle('archive','归档聊天','archived'));
     if (!group) switches.append(toggle('block','屏蔽联系人','blocked',true));
-    box.replaceChildren(...rows,switches);
+    box.replaceChildren(...rows,...(labels ? [labelBox()] : []),switches);
   }
   function open() {
     if (!info || !current()) return;
@@ -103,7 +121,7 @@ const contactDetails = (() => {
     if (next === key) return;
     const same = target?.account === owner.id && target.chat === thread.chat;
     key = next; target = {account:owner.id,chat:thread.chat}; failed = owner.status !== 'online';
-    if (!same) info = null;
+    if (!same) info = labels = null;
     draw();
     if (!failed) void load();
   }, hide() { if (dialog.open) dialog.close(); key = target = info = null; get('remark-edit').hidden = get('reader-phone').hidden = true; }};

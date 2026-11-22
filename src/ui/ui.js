@@ -52,6 +52,7 @@ function render(s) {
   document.body.classList.toggle('unlinked', scope?.status === 'pair');
   renderFeed(s,openMessage);
   accountHealth.draw(s);
+  callBar.render(s);
   const preview = !s.thread && page.messages[0];
   const pair = owner?.status === 'pair', needsSetup = owner && owner.status !== 'online' && !s.thread;
   const title = s.thread?.title || (needsSetup ? owner.name : preview?.title) || '私信';

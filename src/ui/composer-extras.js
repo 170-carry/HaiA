@@ -46,7 +46,6 @@ const composerExtras = (() => {
     }
     draw(); refresh(); get('reply').focus();
   }
-  get('attach').onclick = () => picker.click();
   picker.onchange = () => { add([...picker.files]); picker.value = ''; };
   get('context-close').onclick = () => { const wasEditing = editing; quoted = editing = null; draw(); if (wasEditing) { get('reply').value = ''; refresh(); } };
   get('reply').addEventListener('paste',event => {
@@ -70,5 +69,5 @@ const composerExtras = (() => {
     if (!event.dataTransfer?.files.length || get('composer').hidden) return;
     event.preventDefault(); add([...event.dataTransfer.files]);
   });
-  return {reply,edit,clear,current:()=>({quoted,editing,files}),ready:()=>files.length > 0};
+  return {pick:()=>picker.click(),reply,edit,clear,current:()=>({quoted,editing,files}),ready:()=>files.length > 0};
 })();

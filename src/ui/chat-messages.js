@@ -6,6 +6,29 @@ function messageReceipt(ack) {
   badge.title = label; badge.setAttribute('aria-label',label); badge.setAttribute('role','img');
   badge.append(icon(symbol)); return badge;
 }
+// Web addresses in message text open in the system browser.
+function richText(node, text) {
+  let last = 0;
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/gi)) {
+    node.append(text.slice(last,match.index));
+    const link = el('button','text-link',match[0]);
+    link.type = 'button'; link.dataset.url = match[0];
+    node.append(link); last = match.index + match[0].length;
+  }
+  node.append(text.slice(last));
+}
+function pollBlock(poll) {
+  const box = el('div','poll'), total = poll.votes.reduce((sum,n)=>sum+n,0);
+  box.append(el('strong','',poll.name));
+  poll.options.forEach((option,i) => {
+    const count = poll.votes[i] || 0, row = el('div','poll-option');
+    const fill = el('i','poll-fill'); fill.style.width = (total ? Math.round(count/total*100) : 0)+'%';
+    row.append(fill,el('span','',option),el('b','',String(count)));
+    box.append(row);
+  });
+  box.append(el('small','',total ? '共 '+total+' 票' : '暂无投票 · 请在手机上参与'));
+  return box;
+}
 function renderMessages(messages,owner,previousIds) {
   const fragment = document.createDocumentFragment();
   const newestExisting = previousIds?.size ? messages.find(message=>previousIds.has(message.id))?.time : null;
@@ -36,12 +59,24 @@ function renderMessages(messages,owner,previousIds) {
       bubble.append(quote);
     }
     if (message.media) bubble.append(messageMedia.view(message));
-    const original = el('p','message-text',message.text);
+    if (message.link) {
+      const card = el('button','link-card text-link');
+      card.type = 'button'; card.dataset.url = message.link.url;
+      if (message.link.thumb) { const img = new Image(); img.src = message.link.thumb; img.alt = ''; card.append(img); }
+      const words = el('span','');
+      let host = ''; try { host = new URL(message.link.url).hostname; } catch { /* Shown without a host. */ }
+      words.append(el('strong','',message.link.title),el('span','',message.link.description),el('small','',host));
+      card.append(words); bubble.append(card);
+    }
+    if (message.poll) bubble.append(pollBlock(message.poll));
+    const original = el('p','message-text');
+    richText(original,message.text);
     original.dir = 'auto';
-    original.hidden = !!message.media && !message.media.caption;
+    original.hidden = (!!message.media && !message.media.caption) || !!message.poll;
     row.classList.toggle('revoked',message.type === 'revoked');
     const foot = el('footer','message-foot'), time = el('time','',timeFormat.format(date));
     time.dateTime = date.toISOString();
+    if (message.starred) foot.append(el('span','starred','★'));
     if (message.edited) foot.append(el('span','edited','已编辑'));
     foot.append(time);
     const receipt = message.outgoing && messageReceipt(message.ack);
