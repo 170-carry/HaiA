@@ -1,0 +1,44 @@
+const root = document.documentElement;
+root.classList.add('platform-' + window.desk.platform);
+function renderRail(state, statuses, select) {
+  const all = document.getElementById('all');
+  all.classList.toggle('selected', !state.feedScope);
+  all.setAttribute('aria-pressed',String(!state.feedScope));
+  const tones = accountTones(state.accounts);
+  const items = state.accounts.map(account => {
+    const button = document.createElement('button');
+    button.className = 'rail-button account' + (account.id === state.feedScope ? ' selected' : '');
+    const status = statuses[account.status] || account.status;
+    button.title = [account.name, account.linkedPhone, status].filter(Boolean).join(' · ') + (account.unread ? ' · ' + account.unread + ' 条未读' : '');
+    button.setAttribute('aria-label',button.title);
+    button.setAttribute('aria-pressed', String(account.id === state.feedScope));
+    button.dataset.account=account.id;
+    button.setAttribute('aria-haspopup','menu');
+    if (accountMenu.target===account.id) button.dataset.menuOwner='true';
+    button.oncontextmenu=event=>{event.preventDefault();accountMenu.open(account.id,button);};
+    button.onkeydown=event=>{
+      if(event.key==='ContextMenu' || (event.shiftKey && event.key==='F10')){
+        event.preventDefault();accountMenu.open(account.id,button);
+      }
+    };
+    button.onclick = () => select(account.id);
+    const tile = document.createElement('span');
+    tile.className = 'tile ' + tones.get(account.id);
+    tile.append(avatarPhotos.face(account.id,'self'));
+    const dot = document.createElement('i');
+    dot.className = 'status-dot ' + account.status;
+    tile.append(dot);
+    button.append(tile);
+    if (account.unread > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge'; badge.textContent = account.unread > 99 ? '99+' : String(account.unread);
+      button.append(badge);
+    }
+    return button;
+  });
+  // Preserve keyboard focus across background message updates.
+  const list = document.getElementById('accounts');
+  const focusIndex = Array.from(list.children).indexOf(document.activeElement);
+  list.replaceChildren(...items);
+  if (focusIndex >= 0) list.children[focusIndex]?.focus({preventScroll:true});
+}

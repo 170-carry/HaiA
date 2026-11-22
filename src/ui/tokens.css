@@ -1,0 +1,17 @@
+:root {
+  color-scheme: dark;
+  font: 14px/1.45 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --ink: #f2f3f5; --muted: #b6b8c0; --line: #42434a;
+  --nav: #2b2c31; --surface: #313238; --frame: #3d3e44;
+  --soft: #383940; --active: #43444b; --accent: #5865f2; --accent-ink: #aab2ff;
+  --ring: #98a2ff; --shadow: 0 8px 24px #17171c40;
+  --rail: 72px; --feed: clamp(220px, 22vw, 300px); --strip: 34px;
+  --radius: 8px; color: var(--ink);
+}
+.iris { --tint: #6267a6; --tone: #fff; }
+.teal { --tint: #407776; --tone: #fff; }
+.plum { --tint: #986285; --tone: #fff; }
+.clay { --tint: #996849; --tone: #fff; }
+.ocean { --tint: #4e729a; --tone: #fff; }
+.olive { --tint: #727746; --tone: #fff; }
+@media(max-width:1000px) { :root { --rail: 62px; --feed: 225px; } }

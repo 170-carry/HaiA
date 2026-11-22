@@ -1,0 +1,80 @@
+const groupPanel = (() => {
+  const dialog=get('group-dialog'), panel=get('group-panel-body'), status=get('group-status');
+  const labels={list:'群组列表',members:'群成员',settings:'群组设置'};
+  let account,chat,revision=0;
+  function route(id,next) {
+    if ((id!==account || next!==chat) && dialog.open) dialog.close();
+    account=id; chat=next;
+    get('group-directory').hidden=get('group-settings').hidden=!chat?.endsWith('@g.us');
+  }
+  function listRows(rows,groups) {
+    const search=el('input','group-search'); search.type='search'; search.placeholder=groups ? '搜索群名称' : '搜索成员';
+    search.setAttribute('aria-label',search.placeholder);
+    const list=el('div','group-rows');
+    const draw=()=>{
+      const query=search.value.trim().toLocaleLowerCase(), frag=document.createDocumentFragment();
+      for (const row of rows) {
+        const title=groups ? row.title : row.name;
+        if (!title.toLocaleLowerCase().includes(query)) continue;
+        const item=el(groups ? 'button' : 'div','group-row');
+        item.append(avatar(title,row.chat || row.id,account),el('span','',title));
+        if (groups) {
+          if (row.chat===chat) item.append(el('small','','当前群聊'));
+          item.onclick=()=>{ const id=account;dialog.close();run(()=>api.openChat(id,row.chat)); };
+        } else if (row.admin) item.append(el('small','','管理员'));
+        frag.append(item);
+      }
+      list.replaceChildren(frag);
+      status.textContent=list.children.length ? '' : '没有匹配的结果';
+    };
+    search.oninput=draw; panel.append(search,list); draw();
+  }
+  function settings(info,ticket) {
+    for (const [field,title,limit] of [['subject','群名称',100],['description','群描述',2048]]) {
+      const form=el('form','group-field'), label=el('label','',title);
+      const input=el(field==='subject' ? 'input' : 'textarea');
+      input.id='edit-group-'+field; label.htmlFor=input.id;
+      input.maxLength=limit; input.value=info[field]; input.readOnly=!info.editable[field];
+      form.append(label,input); panel.append(form);
+      if (!info.editable[field]) continue;
+      const save=el('button','primary','保存'+title); save.disabled=true;
+      let original=input.value;
+      function validate() {save.disabled=input.value===original || (field==='subject' && !input.value.trim());}
+      input.oninput=validate; form.append(save);
+      form.onsubmit=async event=>{
+        event.preventDefault(); if(save.disabled)return;
+        const value=field==='subject'?input.value.trim():input.value;
+        input.disabled=save.disabled=true;
+        try {
+          await api.updateGroup(account,chat,field,value);
+          if(ticket===revision){original=input.value=value;status.textContent=title+'已保存';}
+        } catch(e) {if(ticket===revision)status.textContent=translationError(e);}
+        finally {input.disabled=false;validate();}
+      };
+    }
+    if (!Object.values(info.editable).some(Boolean)) status.textContent='当前账号可查看群资料。修改权限由 WhatsApp 群设置决定。';
+  }
+  async function open(tab) {
+    if (!chat?.endsWith('@g.us')) return;
+    const ticket=++revision;
+    for(const button of dialog.querySelectorAll('[data-group-tab]')) button.setAttribute('aria-pressed',String(button.dataset.groupTab===tab));
+    get('group-dialog-title').textContent=labels[tab];
+    get('group-origin').textContent=tab==='list' ? state.accounts.find(a=>a.id===account)?.name : state.thread.title;
+    panel.replaceChildren(); status.textContent='正在加载…';
+    if(!dialog.open) dialog.showModal();
+    try {
+      const result=tab==='list' ? await api.listGroups(account,chat) : await api.groupInfo(account,chat);
+      if(ticket!==revision || !dialog.open)return;
+      status.textContent='';
+      if(tab==='settings') settings(result,ticket);
+      else listRows(tab==='list' ? result : result.members,tab==='list');
+    } catch(e){if(ticket===revision && dialog.open) status.textContent=translationError(e);}
+  }
+  dialog.onclose=()=>{revision++;panel.replaceChildren();};
+  get('group-close').onclick=()=>dialog.close();
+  for(const button of dialog.querySelectorAll('[data-group-tab]')) button.onclick=()=>open(button.dataset.groupTab);
+  get('group-directory').onclick=()=>open('list');
+  get('group-settings').onclick=()=>open('settings');
+  return {route};
+})();
+

@@ -1,0 +1,68 @@
+{
+  "name": "haia",
+  "productName": "HaiA",
+  "version": "0.9.5",
+  "description": "A local multi-account WhatsApp desktop inbox",
+  "author": "HaiA",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/170-carry/HaiA.git"
+  },
+  "main": "src/main/app.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never",
+    "dist:win": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0",
+    "semver": "7.8.6",
+    "@wppconnect/wa-js": "4.8.2"
+  },
+  "build": {
+    "appId": "com.relaydesk.desktop",
+    "directories": {
+      "output": "dist/${version}"
+    },
+    "afterAllArtifactBuild": "./scripts/after-build.cjs",
+    "files": [
+      "src/**/*",
+      "LICENSE",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "identity": "-",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "HaiA 需要使用麦克风录制 WhatsApp 语音消息。",
+        "NSCameraUsageDescription": "Relay Desk 需要使用摄像头进行 WhatsApp 视频通话。"
+      }
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false
+    },
+    "artifactName": "HaiA-${version}-${arch}.${ext}",
+    "extraResources": [
+      {
+        "from": "node_modules/@wppconnect/wa-js",
+        "to": "wa-js",
+        "filter": [
+          "dist/wppconnect-wa.js",
+          "dist/wppconnect-wa.js.LICENSE.txt",
+          "LICENSE"
+        ]
+      }
+    ]
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

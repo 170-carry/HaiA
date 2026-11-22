@@ -1,0 +1,49 @@
+.reader { background: var(--frame); position: relative; }
+#reader-head { display:flex; align-items:center; height:50px; flex:none; gap:9px; padding:0 14px; background:var(--surface); border-bottom:1px solid var(--line); }
+#reader-avatar { width:26px; height:26px; font-size:12px; }
+.reader-title { flex:1; min-width:0; }
+.reader-title strong { display:block; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#actions { display:flex; align-items:center; }
+#thread-search { display:flex; gap:4px; align-items:center; width:clamp(110px,15vw,235px); border:1px solid var(--line); border-radius:7px; height:31px; padding:0 9px; }
+#thread-search input { width:100%; min-width:0; border:0; background:transparent; }
+#thread-search svg { width:15px; height:15px; color:var(--muted); }
+.reader-body { flex:1; display:flex; min-height:0; min-width:0; position:relative; }
+.timeline { flex:1; min-height:0; min-width:0; display:flex; flex-direction:column; }
+#scroll { min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; padding: 16px 14px; }
+#empty { min-height: 100%; display: grid; align-items: safe center; justify-items: center; }
+.state-panel { width: min(100%,400px); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
+.state-panel .state-icon { background: var(--active); color: var(--accent-ink); width: 44px; height: 44px; border-radius: 13px; }
+.setup .state-panel { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 20px; padding: clamp(16px,2.4vw,32px); }
+.setup .state-icon { background: transparent url(assets/whatsapp.svg) center/36px no-repeat; }
+.setup .state-icon svg { visibility: hidden; }
+#empty h2 { font-size: 22px; letter-spacing: -.04em; }
+#help { color: var(--muted); line-height: 1.7; max-width: 36ch; overflow-wrap: anywhere; }
+.message-preview #help { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+#pair-mode { display: flex; border: 1px solid var(--line); background: var(--soft); border-radius: 9px; padding: 3px; }
+#pair-mode button { padding: 6px 15px; border-radius: 6px; font-size: 13px; color: var(--muted); }
+#pair-mode button[aria-pressed=true] { background: var(--surface); color: var(--accent-ink); font-weight: 600; box-shadow: 0 1px 4px #14271824; }
+#phone-form { display: grid; width: min(100%,290px); gap: 9px; text-align: left; }
+#phone-form label, #link-status { font-size: 12px; color: var(--muted); }
+#phone { min-width: 0; background: var(--frame); border: 1px solid var(--line); border-radius: 8px; padding: 11px; }
+#link-code { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: var(--soft); font: 650 clamp(17px,2vw,26px)/1.5 ui-monospace,monospace; letter-spacing: .08em; user-select: all; }
+#qr { width: min(204px,100%); height: auto; aspect-ratio: 1; object-fit: contain; background: white; padding: 12px; border: 1px solid var(--line); border-radius: 10px; image-rendering: pixelated; }
+
+#bubbles { display:flex; flex-direction:column; justify-content:flex-start; min-height:0; }
+.date-pill { display:flex; color:var(--muted); font-size:11px; gap:9px; align-items:center; margin:18px 2px 12px; }
+.date-pill::before, .date-pill::after { content:""; flex:1; height:1px; background:#51525a; }
+.message.found { background:#565247; border-radius:6px; }
+#match-status { padding:5px 15px; font-size:12px; background:var(--surface); color:var(--muted); }
+#composer { padding:6px 10px 10px; background:var(--surface); }
+#replyLabel { display:block; padding:1px 6px 5px; color:var(--muted); font-size:11px; }
+.compose-inner { display:flex; align-items:center; gap:8px; min-height:49px; padding:6px 9px 6px 14px; background:var(--soft); border:1px solid #494a51; border-radius:9px; }
+.compose-inner:focus-within, #thread-search:focus-within { border-color:var(--ring); }
+#reply, #message-query { outline:none; }
+#reply { resize:vertical; flex:1; min-width:0; min-height:28px; max-height:16vh; padding:4px 0; background:transparent; border:0; line-height:1.45; }
+#send { color:#d2d5ff; }
+.state-copy, .state-content { display:flex; flex-direction:column; align-items:center; gap:12px; min-width:0; width:100%; }
+.state-content:not(:has(> :not([hidden]))) { display:none; }
+@media(max-width:1000px) {
+  #reader-head { padding-inline:9px; gap:5px; }
+  #actions button { width:30px; }
+}
+#chat-empty { text-align:center; color:var(--muted); margin:30px auto; }

@@ -1,0 +1,38 @@
+function groupRoutes(desk) {
+  function session(id,chat) {
+    if (id !== desk.active || chat !== desk.thread?.chat || typeof chat !== 'string' || !chat.endsWith('@g.us')) throw new Error('请重新打开群聊');
+    return desk.sessions.get(id);
+  }
+  return {
+    async listGroups(id,chat) {
+      const source=session(id,chat), identity=source.identity;
+      const rows=await source.call('listGroups');
+      if (identity!==source.identity || source.disposed) throw new Error('账号已切换');
+      desk.inbox.conversations.index(id,rows);
+      return rows;
+    },
+    groupInfo:(id,chat)=>session(id,chat).call('groupInfo',chat),
+    async groupMembers(id,chat,action,members) {
+      const source=session(id,chat);
+      const list=Array.isArray(members) ? [...new Set(members.map(m=>String(m).trim()))] : [];
+      if (!['add','remove','promote','demote'].includes(action) || !list.length || list.length>50) throw new Error('请选择 1 到 50 位成员');
+      const ids=list.map(m=>action==='add' ? m.replace(/[\s()+-]/g,'') : m);
+      if (action==='add' ? ids.some(m=>!/^[1-9]\d{6,14}$/.test(m)) : ids.some(m=>!/^[\w.:-]{3,60}@(c\.us|lid|s\.whatsapp\.net)$/.test(m))) throw new Error('请填写含国家区号的手机号');
+      return source.call('groupMembers',chat,action,action==='add' ? ids.map(m=>m+'@c.us') : ids);
+    },
+    async updateGroup(id,chat,field,value) {
+      const source=session(id,chat);
+      if (!['subject','description'].includes(field) || typeof value !== 'string' ||
+          (field === 'subject' && (!value.trim() || value.length>100)) || value.length>2048) throw new Error('请检查群资料的长度');
+      await source.call('saveGroup',chat,field,value);
+      if (field === 'subject' && !source.disposed && desk.active === id && desk.thread?.chat === chat) {
+        desk.thread.title=value;
+        const entry=desk.inbox.conversations.find(id,chat);
+        if (entry) entry.title=value;
+        desk.publish();
+      }
+    }
+  };
+}
+module.exports={groupRoutes};
+
