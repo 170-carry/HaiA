@@ -7,8 +7,21 @@ function warning(message) {
   get('warning').textContent = message; get('warning').hidden = false;
   clearTimeout(timer); timer = setTimeout(()=>get('warning').hidden=true,6500);
 }
+// Errors reach the user in Chinese. Text from the system or a library is kept as a detail after a plain explanation.
+function readable(error) {
+  const text = String(error?.message || '').replace(/^.*?Error invoking remote method .*?: (?:\w*Error: )?/,'').trim();
+  if (!text) return '操作失败，请重试。';
+  return /[\u4e00-\u9fff]/.test(text) ? text : '操作没有完成，请重试。（' + text.slice(0,120) + '）';
+}
 async function run(action) {
-  try { await action(); } catch (error) { warning(error.message || '操作失败，请重试。'); }
+  try { await action(); } catch (error) { warning(readable(error)); }
+}
+const stamps = new Map(), previews = new Map();
+// Remembers the last value drawn for a part of the window. Returns false when it has to be drawn again.
+function unchanged(part, value) {
+  const stamp = JSON.stringify(value);
+  if (stamps.get(part) === stamp) return true;
+  stamps.set(part, stamp); return false;
 }
 function openMessage(m) { return run(()=>api.openChat(m.accountId,m.chat)); }
 function render(s) {
@@ -23,13 +36,23 @@ function render(s) {
   const box = get('scroll'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
   const oldHeight = box.scrollHeight, oldFirst = get('bubbles').firstElementChild;
   if (changed) {
-    if (route) { composerTools.reset(); composerExtras.clear(); voiceRecorder.cancel(); voiceInput.cancel(); }
+    if (route) { composerTools.reset(); composerExtras.leave(route); voiceRecorder.cancel(); voiceInput.cancel(); }
     if (route) drafts.set(route,get('reply').value);
-    route = current; get('reply').value = drafts.get(current) || '';
+    route = current; get('reply').value = drafts.get(current) || ''; composerExtras.enter(current);
+    draftStore.persist(); messageSelect.stop(); mentionPicker.close();
+    const listed = row => row.accountId === s.active && row.chat === s.thread?.chat;
+    threadMarks.open(Math.max((previous?.feed || previous)?.messages.find(listed)?.unreadCount || 0, (s.feed || s).messages.find(listed)?.unreadCount || 0));
+    previews.clear();
+  }
+  // Preview images arrive once per message; later updates refer to the copy kept here.
+  if (s.thread) for (const message of s.messages) for (const part of [message.media,message.link]) {
+    if (part?.thumb) previews.set(message.id+(part === message.link ? '#link' : ''),part.thumb);
+    else if (part?.kept) part.thumb = previews.get(message.id+(part === message.link ? '#link' : '')) || '';
   }
   if (previous?.feedScope !== s.feedScope) { get('query').value = ''; get('feed-scroll').scrollTop = 0; }
   avatarPhotos.setAccounts(s.accounts);
-  renderRail(s,statusText,id=>run(()=>api.select(id)));
+  // The rail, dock and header avatars are redrawn only when what they show has changed.
+  if (unchanged('rail',[s.accounts,s.feedScope]) === false) renderRail(s,statusText,id=>run(()=>api.select(id)));
   get('welcome').hidden = s.accounts.length > 0;
   get('scroll').hidden = !s.accounts.length;
   const connected = s.accounts.filter(account => account.status === 'online').length;
@@ -41,8 +64,10 @@ function render(s) {
   get('archived-count').hidden = !s.archivedCount;
   get('archived-count').textContent = String(s.archivedCount || '');
   const dock = get('dock-avatar');
-  dock.className = 'dock-icon ' + (scope ? accountTones(s.accounts).get(scope.id) : '');
-  dock.replaceChildren(scope ? avatarPhotos.face(scope.id,'self') : icon('inbox'));
+  if (unchanged('dock',[scope?.id,scope?.photoIdentity,s.accounts.map(a=>a.id)]) === false) {
+    dock.className = 'dock-icon ' + (scope ? accountTones(s.accounts).get(scope.id) : '');
+    dock.replaceChildren(scope ? avatarPhotos.face(scope.id,'self') : icon('inbox'));
+  }
   dock.classList.toggle('online', scope ? scope.status === 'online' : connected > 0);
   get('connections').classList.toggle('online', connected > 0);
   get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status]].filter(Boolean).join(' · ') : connected + ' / ' + s.accounts.length + ' 个账号已连接';
@@ -52,7 +77,7 @@ function render(s) {
 
   // An account that still has to be linked has no conversations, so its list column is folded away.
   document.body.classList.toggle('unlinked', scope?.status === 'pair');
-  renderFeed(s,openMessage);
+  if (unchanged('feed',[draftStore.version,page.messages,page.count,s.accounts,s.thread?.chat,s.active,s.feedScope,s.feedMore,s.feedFilter]) === false) renderFeed(s,openMessage);
   accountHealth.draw(s);
   callBar.render(s);
   const preview = !s.thread && page.messages[0];
@@ -62,9 +87,11 @@ function render(s) {
   get('group-label').hidden = !(s.thread?.chat || preview?.chat || '').endsWith('@g.us') || !!needsSetup;
 
 
-  get('reader-avatar').className = 'avatar ' + (needsSetup ? accountTones(s.accounts).get(owner.id) : tone(s.thread?.chat || preview?.chat || title));
-  get('reader-avatar').replaceChildren(avatarPhotos.face(owner?.id || preview?.accountId,
-    needsSetup ? 'self' : s.thread?.chat || preview?.chat));
+  if (unchanged('reader',[owner?.id,owner?.photoIdentity,preview?.accountId,!!needsSetup,s.thread?.chat || preview?.chat || title,s.accounts.map(a=>a.id)]) === false) {
+    get('reader-avatar').className = 'avatar ' + (needsSetup ? accountTones(s.accounts).get(owner.id) : tone(s.thread?.chat || preview?.chat || title));
+    get('reader-avatar').replaceChildren(avatarPhotos.face(owner?.id || preview?.accountId,
+      needsSetup ? 'self' : s.thread?.chat || preview?.chat));
+  }
   profilePanel.render(s.thread, owner, statusText, s.messages);
   threadSearch.setThread(s.thread ? current : null);
   get('empty').classList.toggle('setup', !!needsSetup);
@@ -80,8 +107,11 @@ function render(s) {
     preview ? preview.text : '从左侧列表打开对话，在这里阅读和回复。';
   pairingPanel.render(pair ? owner.id : null, s.link, s.qr);
   const firstId = s.thread && s.messages.at(-1)?.id;
-  chatTranslation.resetView();
-  get('bubbles').replaceChildren(s.thread ? renderMessages(s.messages, owner, changed ? null : new Set((previous?.messages || []).map(m=>m.id))) : document.createDocumentFragment());
+  if (changed) { chatTranslation.resetView(); resetMessageRows(); messageMedia.reset(); get('bubbles').replaceChildren(); }
+  const known = changed ? null : new Set((previous?.messages || []).map(m=>m.id));
+  syncMessages(get('bubbles'), s.thread ? s.messages : [], owner, known, s.thread ? threadMarks.divider(s.messages) : null);
+  chatTranslation.prune(); messageSelect.paint();
+  if (known && s.thread) threadMarks.arrived(s.messages.filter(m=>!known.has(m.id) && !m.outgoing && !m.system).length, atBottom);
   if (get('bubbles').firstElementChild) get('bubbles').firstElementChild.dataset.first = firstId;
   threadSearch.mark();
   get('more').hidden = !s.thread || !(s.more || s.count > s.messages.length);
@@ -91,6 +121,7 @@ function render(s) {
   get('composer').hidden = !s.thread;
   get('reply').placeholder = '发送消息给 @' + title;
   get('replyLabel').textContent = '使用 ' + (owner?.name || '') + ' 回复';
+  replyAccount.render(s,owner);
   get('send').disabled = !canSend(owner);
   get('reply').disabled = sending.has(route);
   const presence = s.thread?.presence;
@@ -100,9 +131,10 @@ function render(s) {
   if (s.thread && (atBottom || changed)) box.scrollTop = box.scrollHeight;
   else if (changed) box.scrollTop = 0;
   else if (s.thread && oldFirst?.dataset.first !== firstId) box.scrollTop += box.scrollHeight-oldHeight;
+  threadMarks.settle();
 }
 function canSend(owner) {
-  return !sending.has(route) && owner?.status === 'online' && Boolean(get('reply').value.trim() || composerExtras.ready());
+  return !sending.has(route) && owner?.status === 'online' && !get('composer').classList.contains('locked') && Boolean(get('reply').value.trim() || composerExtras.ready());
 }
 function addDialog() { get('name-error').textContent='';get('name').value='';get('dialog').showModal();get('name').focus(); }
 get('add').onclick = get('first').onclick = addDialog;
@@ -118,7 +150,6 @@ get('newAccount').onsubmit = e=>{
   e.preventDefault(); const name=get('name').value.trim(); if (!name) {get('name-error').textContent='请输入账号名称';get('name').focus();return;}
   get('dialog').close(); run(()=>api.add(name));
 };
-get('send').title = api.platform === 'darwin' ? '发送消息（⌘ + Enter）' : '发送消息（Ctrl + Enter）';
 for (const mode of ['all','unread','archived']) get('filter-' + mode).onclick = () => {
   for (const other of ['all','unread','archived']) get('filter-' + other).setAttribute('aria-pressed', String(mode === other));
   if (state) renderFeed(state,openMessage);
@@ -128,7 +159,10 @@ get('reply').oninput = ()=>{
   get('send').disabled = !canSend(state?.accounts.find(a=>a.id===state.active));
 };
 get('reply').onkeydown = e=>{
-  if (!e.isComposing && (e.metaKey || e.ctrlKey) && e.key==='Enter') { e.preventDefault();get('composer').requestSubmit(); }
+  if (e.isComposing || e.key !== 'Enter') return;
+  // Default: Enter sends and Shift + Enter breaks the line. The other mode keeps Enter for line breaks.
+  const send = sendKey.mode() === 'enter' ? !e.shiftKey && !e.altKey : e.metaKey || e.ctrlKey;
+  if (send) { e.preventDefault();get('composer').requestSubmit(); }
 };
 get('composer').onsubmit = e=>{
   e.preventDefault();const key=route, text=get('reply').value, {quoted,editing,files}=composerExtras.current();
@@ -137,11 +171,17 @@ get('composer').onsubmit = e=>{
   run(async()=>{
     try {
       const account=state.active, chat=state.thread.chat;
-      if (editing) await api.edit(account,chat,editing.id,text);
+      const wire = mentionDrafts.encode(key,text);
+      if (editing) await api.edit(account,chat,editing.id,wire.text,wire.ids);
       else if (files.length) {
         // The typed text travels as the caption of the first attachment.
-        for (const [i,file] of files.entries()) await api.sendFile(account,chat,{name:file.name,data:file.data,caption:i ? '' : text,quote:i ? null : quoted?.id});
-      } else await api.send(account,chat,text,quoted?.id || null);
+        const outcome = await composerExtras.sendAll(account,chat,key,wire.text,quoted,wire.ids);
+        if (outcome.error) {
+          if (outcome.done) { drafts.delete(key); if (route === key) { get('reply').value = ''; composerTools.reset(); } }
+          throw outcome.error;
+        }
+      } else await api.send(account,chat,wire.text,quoted?.id || null,wire.ids);
+      mentionDrafts.clear(key);
       drafts.delete(key);if(route===key){get('reply').value='';composerTools.reset();composerExtras.clear();}
     } finally {sending.delete(key);render(state);if(route===key)get('reply').focus();}
   });

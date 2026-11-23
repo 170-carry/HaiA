@@ -11,7 +11,12 @@ window.relayContact = (() => {
     const chat = WPP.chat.get(chatId), state = chatState(chatId);
     if (chatId.endsWith('@g.us')) {
       const meta = chat?.groupMetadata;
-      return {...state, group:true, title:chat?.formattedTitle || '', description:text(meta?.desc),
+      let admin = false;
+      try { admin = Boolean(meta?.participants?.iAmAdmin?.()); } catch { /* Membership may not be loaded. */ }
+      // Restrictions WhatsApp places on the group or on this member.
+      const limits = {suspended:Boolean(meta?.suspended), terminated:Boolean(meta?.terminated), announce:Boolean(meta?.announce), restrict:Boolean(meta?.restrict),
+        approval:Boolean(meta?.membershipApprovalMode), left:Boolean(chat?.isReadOnly), admin, blocked:chat?.canSend === false};
+      return {...state, limits, ephemeral:Number(meta?.ephemeralDuration ?? chat?.ephemeralDuration) || 0, group:true, title:chat?.formattedTitle || '', description:text(meta?.desc),
         members:meta?.participants?.length ?? null, created:Number(meta?.creation) * 1000 || null};
     }
     const contact = await attempt(() => WPP.contact.get(chatId));
@@ -21,7 +26,7 @@ window.relayContact = (() => {
     const profile = contact?.isBusiness ? await attempt(() => WPP.contact.getBusinessProfile(chatId)) : null;
     const shared = await attempt(() => WPP.contact.getCommonGroups(chatId)) || [];
     const sites = [].concat(profile?.website || []).map(site => text(site?.url || site)).filter(Boolean);
-    return {...state, group:false, title:chat?.formattedTitle || contact?.formattedName || '',
+    return {...state, ephemeral:Number(chat?.ephemeralDuration) || 0, group:false, title:chat?.formattedTitle || contact?.formattedName || '',
       remark:contact?.isMyContact ? text(contact.name) : '', nickname:text(contact?.pushname), verified:text(contact?.verifiedName),
       phone:digits ? '+'+digits : '', about:text(typeof status === 'string' ? status : status?.status),
       blocked:Boolean(await attempt(() => WPP.blocklist.isBlocked(chatId))),

@@ -1,3 +1,4 @@
+process.env.HAIA_TEST = '1';
 const { app, BrowserWindow, webContents, Notification, session } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
@@ -81,14 +82,17 @@ async function until(fn) {
     await b.executeJavaScript("events.get('chat.msg_ack_change')({ids:[rows.at(-1).id],ack:3});true");
     await until(()=>ui("document.querySelector('.outgoing .receipt.read')?.title==='已读'"));
     await ui("get('translation-settings').click()");
-    await until(()=>ui("get('translation-dialog').open"));
+    await until(()=>ui("get('settings-dialog').open && get('incoming-language').options.length>1 && !!get('key-deepl')"));
     await ui("get('translation-engine').value='keyed';get('translation-engine').dispatchEvent(new Event('change'));get('key-deepl').value='test:fx'; get('key-azure').value='test';get('auto-translate').checked=true;get('translation-form').requestSubmit()");
+    await until(()=>ui("get('translation-saved').textContent==='已保存'"));
+    await ui("get('settings-close').click()");
     await until(()=>ui("document.querySelector('.incoming .translation-output')?.textContent.startsWith('测试译文')"));
     assert.equal(await ui("document.querySelector('.incoming .message-text').textContent"),'刚收到包裹了，谢谢你。');
-    await ui("get('emoji-toggle').click();document.querySelector('.emoji-grid button').click();get('draft-translate').click()");
+    await ui("localStorage.setItem('translate-mode','preview');get('emoji-toggle').click();document.querySelector('.emoji-grid button').click();get('draft-translate').click()");
     await until(()=>ui("!get('draft-proposal').hidden"));
     assert.equal(await ui("get('reply').value"),'😀');
     await ui("get('apply-draft').click()");
+    await ui("localStorage.removeItem('translate-mode')");
     assert.equal(await ui("get('reply').value"),'测试译文 😀');
     assert.equal(await b.executeJavaScript('rows.length'),2);
     await ui("get('reply').value='';get('reply').dispatchEvent(new Event('input'))");
@@ -289,11 +293,11 @@ async function until(fn) {
     const answer=(await call('state')).messages.find(m=>m.text==='引用回复');
     assert.equal(answer.quote.id,photo.id.split('_')[2]);
     await ui("document.querySelector('.quote').click()");
-    await until(()=>ui("document.querySelector('.message.found .media-picture') !== null"));
+    await until(()=>ui("document.querySelector('.message.flash .media-picture') !== null"));
     await call('edit',me,G,answer.id,'改过的回复');
     await until(()=>ui("[...document.querySelectorAll('.message')].some(n=>n.querySelector('.message-text').textContent==='改过的回复' && n.querySelector('.edited'))"));
     await ui("[...document.querySelectorAll('.message')].find(n=>n.dataset.id==="+JSON.stringify(answer.id)+").querySelector('[data-act=more]').click()");
-    assert.deepEqual(await ui("get('message-menu').matches(':popover-open') && [...get('message-menu').querySelectorAll('button')].map(b=>b.textContent)"),['回复','转发','星标','复制文字','编辑','撤回','为我删除']);
+    assert.deepEqual(await ui("get('message-menu').matches(':popover-open') && [...get('message-menu').querySelectorAll('button')].map(b=>b.textContent)"),['回复','转发','星标','复制文字','多选','消息详情','编辑','撤回','为我删除']);
     if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'message-actions.png'),(await shell.capturePage()).toPNG()); }
     await ui("get('message-menu').querySelector('button').click()");
     assert.equal(await ui("!get('reply-context').hidden && get('context-text').textContent"),'改过的回复');
@@ -333,10 +337,21 @@ async function until(fn) {
     await ui("document.querySelector('.message [data-act=more]').click();[...get('message-menu').querySelectorAll('button')].find(b=>b.textContent==='转发').click()");
     await until(()=>ui("get('forward-dialog').open && get('forward-results').querySelectorAll('.person-result').length>1"));
     await ui("get('forward-close').click()");
-    await ui("get('new-group').click();get('group-name').value='华东代理群';get('group-members').value='+65 8123 4567\\n+86 138 0013 8000';get('create-group-form').requestSubmit()");
+    await ui("get('new-group').click();get('group-name').value='华东代理群'");
+    await until(()=>ui("get('create-group').open && get('group-candidates').querySelectorAll('.person-result').length>0 && get('group-candidates-note').textContent==='最近联系人'"));
+    const typeMember=text=>ui("get('group-search').value="+JSON.stringify(text)+";get('group-search').dispatchEvent(new Event('input'))");
+    await typeMember('+65 8123 4567');
+    await until(()=>ui("get('group-candidates').querySelector('.add-number')?.textContent==='添加号码 +6581234567'"));
+    await ui("get('group-candidates').querySelector('.add-number').click()");
+    await typeMember('目录联系人');
+    await until(()=>ui("[...get('group-candidates').querySelectorAll('.person-result strong')].some(n=>n.textContent==='目录联系人')"));
+    await ui("[...get('group-candidates').querySelectorAll('.person-result')].find(b=>b.textContent.includes('目录联系人')).click()");
+    await until(()=>ui("get('group-chosen').querySelectorAll('.member-chip').length===2 && get('group-chosen-label').textContent==='已选 2 人'"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'new-group.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('create-group-form').requestSubmit()");
     await until(async()=>(await call('state')).thread?.chat==='new-group@g.us');
     await until(()=>ui("get('reader-title').textContent==='华东代理群'"));
-    await until(()=>ui("get('warning').textContent.includes('+8613800138000')"));
+    await until(()=>ui("get('warning').textContent.includes('未能添加：+16505550123')"));
     assert.equal(await ui("!get('record').hidden && get('recording').hidden"),true);
     assert.equal(await ui("!get('health').hidden && get('health-count').hidden"),true);
     assert.equal((await call('translationSettings')).voice,'en');
@@ -379,7 +394,7 @@ async function until(fn) {
     await until(()=>ui("!!document.querySelector('.message .starred')"));
     await assert.rejects(()=>call('openExternal','file:///etc/passwd'));
     await ui("get('attach').click()");
-    assert.deepEqual(await ui("get('attach-menu').matches(':popover-open') && [...get('attach-menu').querySelectorAll('button')].map(b=>b.textContent)"),['图片或文件','位置','联系人名片','投票']);
+    assert.deepEqual(await ui("get('attach-menu').matches(':popover-open') && [...get('attach-menu').querySelectorAll('button')].map(b=>b.textContent)"),['图片或文件','位置','联系人名片','投票','快捷回复']);
     await ui("get('attach-menu').querySelectorAll('button')[3].click()");
     assert.equal(await ui("get('special-dialog').open && get('special-title').textContent"),'发起投票');
     await ui("get('special-cancel').click()");
@@ -398,6 +413,7 @@ async function until(fn) {
     assert.equal(await a.executeJavaScript('window.rejected'),'in-1');
     await ui("get('open-status').click()");
     await until(()=>ui("get('status-dialog').open && get('status-list').querySelectorAll('.status-row.unseen').length===1"));
+    await pause(250); await require('./linked-features.cjs').captureStatus(shell,process.env.HAIA_VERIFY_SCREENS);
     await ui("get('status-list').querySelector('.status-row').click()");
     await until(()=>ui("get('status-list').querySelector('.status-text.plain')?.textContent==='本周新品到货'"));
     await ui("get('status-text').value='周末正常发货';get('status-form').requestSubmit()");
@@ -430,7 +446,266 @@ async function until(fn) {
     await call('chatSetting',me,'demo@c.us','pinned',false);
     await call('chatSetting',me,'demo@c.us','unread',true);
     await until(async()=>(await call('state')).feed.messages.find(m=>m.chat==='demo@c.us').unreadCount===1);
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && state.active==="+JSON.stringify(me)+" && get('reply-account').title.includes('销售 A') && get('replyLabel').hidden"));
+    await ui("get('reply-account').click()");
+    assert.deepEqual(await ui("get('attach-menu').matches(':popover-open') && [...get('attach-menu').querySelectorAll('.reply-option')].map(b=>b.querySelector('strong').textContent+b.getAttribute('aria-checked'))"),['销售 Atrue','客服 Bfalse']);
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'reply-account.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('attach-menu').querySelectorAll('.reply-option')[1].click()");
+    await until(async()=>{const st=await call('state');return st.active===accounts[1].id && st.thread?.chat==='demo@c.us';});
+    await until(()=>ui("get('reply-account').title.includes('客服 B')"));
+    await call('send',accounts[1].id,'demo@c.us','这边用客服号跟进。');
+    assert.equal(await call('chatLabels',accounts[1].id,'demo@c.us'),null);
+    await until(()=>ui("get('profile-details').querySelector('.switches') && !document.querySelector('.label-chips')"));
+    await until(()=>b.executeJavaScript("rows.at(-1).body==='这边用客服号跟进。' && rows.at(-1).id.remote==='demo@c.us'"));
+    await assert.rejects(()=>call('replyAs',me,'new-group@g.us'));
+    await call('select',me);
+    await call('openChat',me,G);
+    await until(()=>ui("!get('composer').hidden && !get('composer').classList.contains('locked') && get('chat-limit').hidden"));
+    await a.executeJavaScript(`(() => {
+      const meta=chats.get('fixture@g.us').groupMetadata; meta.announce=true; meta.suspended=true;
+      const msg={body:'',type:'gp2',subtype:'suspend',id:{_serialized:'limit-fixture',remote:'fixture@g.us',fromMe:false},t:now+500};
+      rows.push(msg); events.get('chat.new_message')(msg);
+    })()`);
+    await until(()=>ui("get('composer').classList.contains('locked') && get('chat-notice').textContent.includes('已被 WhatsApp 停用') && get('chat-limit').textContent==='已停用' && !get('reply').checkVisibility()"));
+    await until(()=>ui("[...document.querySelectorAll('.limit-list li')].map(li=>li.textContent).join('|').includes('已被 WhatsApp 停用|全员禁言 · 仅管理员可发言') && get('bubbles').textContent.includes('此群已被 WhatsApp 停用')"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'group-limits.png'),(await shell.capturePage()).toPNG()); }
+    await a.executeJavaScript(`(() => {
+      const meta=chats.get('fixture@g.us').groupMetadata; meta.announce=false; meta.suspended=false;
+      const msg={body:'',type:'gp2',subtype:'unsuspend',id:{_serialized:'limit-fixture-2',remote:'fixture@g.us',fromMe:false},t:now+501};
+      rows.push(msg); events.get('chat.new_message')(msg);
+    })()`);
+    await until(()=>ui("!get('composer').classList.contains('locked') && get('chat-notice').hidden && get('chat-limit').hidden && get('reply').checkVisibility()"));
+    await call('openChat',me,'demo@c.us');
+    for (const name of ['一.png','二.png','三.png']) await call('sendFile',me,'demo@c.us',{name,data:pixel});
+    await until(()=>ui("document.querySelectorAll('#bubbles .album').length===1 && document.querySelectorAll('.album .album-item .media-picture').length===3"));
+    await ui("document.querySelectorAll('.album-item')[1].dispatchEvent(new MouseEvent('contextmenu',{bubbles:true}))");
+    assert.equal(await ui("get('message-menu').matches(':popover-open') && get('message-menu').querySelectorAll('button').length>4"),true);
+    await ui("get('message-menu').querySelector('button').click()");
+    assert.equal(await ui("!get('reply-context').hidden && get('context-text').textContent"),'二.png');
+    await ui("get('context-close').click()");
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'album.png'),(await shell.capturePage()).toPNG()); }
+    await call('openChat',me,'demo@c.us');
+    const press=init=>ui("get('reply').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,..."+JSON.stringify(init)+"}))");
+    await ui("get('reply').value='回车发送';get('reply').dispatchEvent(new Event('input'))");
+    assert.equal(await press({shiftKey:true}),true);
+    assert.equal(await press({}),false);
+    await until(()=>a.executeJavaScript("rows.at(-1).body==='回车发送'"));
+    await until(()=>ui("get('reply').value===''"));
+    await ui("get('send').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));get('attach-menu').querySelectorAll('.reply-option')[1].click()");
+    await ui("get('reply').value='组合键发送';get('reply').dispatchEvent(new Event('input'))");
+    assert.equal(await press({}),true);
+    assert.equal(await press({ctrlKey:true}),false);
+    await until(()=>a.executeJavaScript("rows.at(-1).body==='组合键发送'"));
+    await ui("localStorage.removeItem('send-key')");
+    await ui("get('reply').value='周三发货';get('reply').dispatchEvent(new Event('input'))");
+    assert.equal(await ui("get('reply').dispatchEvent(new KeyboardEvent('keydown',{key:'w',ctrlKey:true,bubbles:true,cancelable:true}))"),false);
+    await until(()=>ui("get('reply').value==='测试译文 周三发货' && get('draft-proposal').hidden"));
+    await ui("get('draft-translate').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}))");
+    assert.deepEqual(await ui("[...get('attach-menu').querySelectorAll('button')].map(b=>b.textContent)"),['直接替换输入框原文','先预览，确认后替换','快捷键：Ctrl + W · 点击更改']);
+    await ui("get('attach-menu').querySelectorAll('button')[1].click();get('reply').value='再发一箱';get('reply').dispatchEvent(new Event('input'));get('draft-translate').click()");
+    await until(()=>ui("!get('draft-proposal').hidden && get('draft-result').textContent==='测试译文 再发一箱' && get('reply').value==='再发一箱'"));
+    await ui("localStorage.removeItem('translate-mode');get('reply').value='';get('reply').dispatchEvent(new Event('input'))");
+    await ui("get('open-settings').click()");
+    await until(()=>ui("get('settings-dialog').open && document.querySelector('input[name=send-key]:checked').value==='enter' && document.querySelector('input[name=translate-mode]:checked').value==='replace' && get('settings-translate-key').textContent==='Ctrl + W' && get('settings-voice').options.length>2"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'settings.png'),(await shell.capturePage()).toPNG()); }
+    await ui("const pick=document.querySelector('input[name=send-key][value=mod]');pick.checked=true;pick.dispatchEvent(new Event('change',{bubbles:true}))");
+    assert.equal(await ui("localStorage.getItem('send-key')==='mod' && get('send').title.includes('Enter 换行')"),true);
+    await ui("get('settings-voice').value='none';get('settings-voice').dispatchEvent(new Event('change',{bubbles:true}))");
+    await until(async()=>(await call('translationSettings')).voice==='none');
+    await call('saveVoiceLanguage','en');
+    await ui("localStorage.removeItem('send-key');get('settings-accounts').click()");
+    await until(()=>ui("!get('settings-dialog').open && get('health-dialog').open"));
+    await ui("get('health-close').click()");
+    // Regression checks for the review findings.
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && document.querySelectorAll('#bubbles .message').length>3"));
+    await ui("window.keptRow=document.querySelector('#bubbles .message.incoming');const range=document.createRange();range.selectNodeContents(keptRow.querySelector('.message-text'));getSelection().removeAllRanges();getSelection().addRange(range);window.keptText=getSelection().toString();true");
+    await a.executeJavaScript("events.get('chat.presence_change')({id:{_serialized:'demo@c.us'},state:'composing',isOnline:true});true");
+    await until(()=>ui("!get('presence').hidden && get('presence').textContent==='正在输入…'"));
+    assert.equal(await ui("keptRow.isConnected && keptText.length>0 && getSelection().toString()===keptText"),true);
+    await a.executeJavaScript("events.get('chat.presence_change')({id:{_serialized:'demo@c.us'},state:'available',isOnline:true});true");
+    await ui("getSelection().removeAllRanges()");
+    const own=(await call('state')).messages.find(m=>m.outgoing && !m.media && m.text && m.type!=='revoked');
+    await ui("composerExtras.edit(state.messages.find(m=>m.id==="+JSON.stringify(own.id)+"))");
+    assert.equal(await ui("get('reply').value"),own.text);
+    await call('openChat',me,G);
+    await until(()=>ui("state.thread?.chat==="+JSON.stringify(G)+" && get('reply').value!=="+JSON.stringify(own.text)+" && get('reply-context').hidden"));
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us'"));
+    assert.equal(await ui("get('reply').value==='' && get('reply-context').hidden"),true);
+    await ui("composerExtras.reply(state.messages.find(m=>m.id==="+JSON.stringify(own.id)+"))");
+    await call('openChat',me,G);
+    await until(()=>ui("state.thread?.chat==="+JSON.stringify(G)+" && get('reply-context').hidden"));
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && !get('reply-context').hidden && get('context-text').textContent==="+JSON.stringify(own.text)));
+    await ui("get('context-close').click()");
+    const mainWindow=BrowserWindow.fromWebContents(shell);
+    await require('./linked-features.cjs').readOnArrival({window:mainWindow,page:a,ui,call,until,Notification,pause});
+    await assert.rejects(()=>call('send',me,'missing@c.us','x'),/会话不存在/);
+    await ui("get('reply').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    // Daily-use features.
+    await call('openChat',me,G);
+    await until(()=>ui("state.thread?.chat==="+JSON.stringify(G)));
+    await ui("get('reply').value='草稿内容待发';get('reply').dispatchEvent(new Event('input'))");
+    await a.executeJavaScript("for(let i=0;i<3;i++) sample('未读消息 '+i,'unread-probe-'+i);true");
+    await until(async()=>(await call('state')).feed.messages.find(m=>m.chat==='demo@c.us')?.unreadCount>=3);
+    await until(()=>ui("[...document.querySelectorAll('#list .row')].some(r=>r.querySelector('.draft-mark'))===false"));
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && !!document.querySelector('.unread-divider') && /未读消息 0|正在看的会话里的新消息/.test(document.querySelector('.unread-divider').nextElementSibling.textContent)"));
+    await until(()=>ui("[...document.querySelectorAll('#list .row')].find(r=>JSON.parse(r.dataset.message)[1]==="+JSON.stringify(G)+")?.querySelector('.snippet').textContent==='草稿：草稿内容待发'"));
+    assert.equal(await ui("JSON.parse(localStorage.getItem('drafts')).some(([key,text])=>text==='草稿内容待发')"),true);
+    await ui("get('scroll').scrollTop=0;get('scroll').dispatchEvent(new Event('scroll'))");
+    await a.executeJavaScript("sample('滚动时到达的消息','jump-probe');true");
+    await until(()=>ui("!get('jump-bottom').hidden && get('jump-count').textContent==='1'"));
+    await ui("get('jump-bottom').click()");
+    await until(()=>ui("get('jump-bottom').hidden"));
+    await call('savePreferences',{templates:[{title:'发货说明',text:'您好，货物将在周三发出。'}]});
+    await ui("preferences.save({})");
+    await ui("get('reply').value='/发货';get('reply').dispatchEvent(new Event('input'))");
+    await until(()=>ui("get('attach-menu').matches(':popover-open') && get('attach-menu').querySelector('.template-option strong')?.textContent==='发货说明'"));
+    await ui("get('reply').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))");
+    assert.equal(await ui("get('reply').value"),'您好，货物将在周三发出。');
+    await ui("get('reply').value='';get('reply').dispatchEvent(new Event('input'))");
+    const found=await call('searchMessages',null,'未读消息',false);
+    assert.equal(found.length,3);
+    await ui("get('open-search').click();get('search-query').value='未读消息 2';get('search-query').dispatchEvent(new Event('input'))");
+    await until(()=>ui("get('search-results').querySelectorAll('.search-row').length===1"));
+    await ui("get('search-results').querySelector('.search-row').click()");
+    await until(()=>ui("!get('search-dialog').open && !!document.querySelector('.message.flash')?.textContent.includes('未读消息 2')"));
+    const probe=(await call('state')).messages.find(m=>m.text==='未读消息 1');
+    await call('star',me,'demo@c.us',probe.id,true);
+    await until(async()=>(await call('searchMessages',me,'',true)).some(m=>m.id===probe.id));
+    await ui("messageSelect.start(state.messages.find(m=>m.id==="+JSON.stringify(probe.id)+"))");
+    await ui("[...document.querySelectorAll('#bubbles .message')].find(n=>n.textContent.includes('未读消息 2')).querySelector('.message-text').click()");
+    assert.equal(await ui("!get('select-bar').hidden && get('select-count').textContent==='已选 2 条' && document.querySelectorAll('.message.picked').length===2 && !get('reply').checkVisibility()"),true);
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'multi-select.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('select-forward').click()");
+    await until(()=>ui("get('forward-dialog').open && get('forward-status').textContent.startsWith('转发 2 条消息') && get('forward-owner').options.length===2"));
+    await ui("[...get('forward-results').querySelectorAll('.person-result')].find(b=>b.textContent.includes('华东代理群')).click()");
+    await until(()=>ui("get('warning').textContent.startsWith('已转发 2 条给 华东代理群') && get('select-bar').hidden"));
+    await call('openChat',me,G);
+    await until(()=>ui("state.thread?.chat==="+JSON.stringify(G)+" && get('reply').value==='草稿内容待发'"));
+    await a.executeJavaScript(`(() => {
+      const msg={body:'@16505550102 请确认，@one 也看一下',type:'chat',author:{_serialized:'16505550103@c.us'},notifyName:'Leo',mentionedJidList:['16505550102@c.us','one'],
+        id:{_serialized:'false_fixture@g.us_MENTION1',remote:'fixture@g.us',fromMe:false},t:now+700};
+      rows.push(msg); events.get('chat.new_message')(msg);
+    })()`);
+    await until(()=>ui("[...document.querySelectorAll('.message.mentions-me .mention')].map(n=>n.textContent).join()==='@+16505550102,@你'"));
+    await ui("get('reply').value='@';get('reply').setSelectionRange(1,1);get('reply').dispatchEvent(new Event('input'))");
+    await until(()=>ui("get('attach-menu').matches(':popover-open') && get('attach-menu').dataset.kind==='mentions' && get('attach-menu').querySelectorAll('.reply-option').length>0"));
+    await ui("get('attach-menu').querySelector('.reply-option').click()");
+    assert.equal(await ui("get('reply').value"),'@+16505550102 ');
+    await ui("get('composer').requestSubmit()");
+    await until(()=>a.executeJavaScript("window.sentMention?.ids?.[0]==='16505550102@c.us' && window.sentMention.text==='@16505550102 '"));
+    await ui("get('reply').value='';get('reply').dispatchEvent(new Event('input'))");
+    const ownGroup=(await call('state')).messages.find(m=>m.outgoing && !m.system && m.text && m.type!=='revoked');
+    await until(()=>ui('state.messages.some(m=>m.id==='+JSON.stringify(ownGroup.id)+')'));
+    const details=await call('messageInfo',me,G,ownGroup.id);
+    assert.equal(details.readers.length===1 && details.waiting===1,true);
+    await ui("messageDetails.open(state.messages.find(m=>m.id==="+JSON.stringify(ownGroup.id)+"))");
+    assert.equal(await ui("get('info-dialog').open"),true);
+    const infoText = await ui("get('info-body').textContent");
+    assert.match(infoText,/已读 · 1/);
+    assert.match(infoText,/1 位成员尚未收到/);
+    await ui("get('info-close').click()");
+    await call('setEphemeral',me,G,604800);
+    assert.equal((await call('contactInfo',me,G)).ephemeral,604800);
+    await assert.rejects(()=>call('setEphemeral',me,'demo@c.us',604800));
+    await require('./linked-features.cjs').crossAccount({call,a,b,me,other:accounts[1].id,chat:G,pixel});
+    await call('openChat',me,'demo@c.us');
+    for (const seconds of [86400,604800,7776000,0]) {
+      await call('setEphemeral',me,'demo@c.us',seconds);
+      assert.equal((await call('contactInfo',me,'demo@c.us')).ephemeral,seconds);
+    }
+    await a.executeJavaScript("rows.push({id:{_serialized:'archived-fixture-1',remote:'demo@c.us',fromMe:false},t:now-99000,type:'chat',body:'仅关联设备索引保存的旧消息'});true");
+    assert.equal((await call('searchMessages',me,'仅关联设备索引',false)).length,0);
+    const history = await call('searchHistory',me,'仅关联设备索引');
+    assert.equal(history.unavailable,0); assert.equal(history.rows.length,1);
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && !get('thread-search').hidden"));
+    await ui("get('message-query').value='仅关联设备索引';get('message-query').dispatchEvent(new Event('input'))");
+    try { await until(()=>ui("get('bubbles').textContent.includes('仅关联设备索引保存的旧消息')")); }
+    catch (error) {
+      const result = await ui("({route,query:get('message-query').value,matches:get('match-status').textContent,warning:get('warning').textContent,loaded:state.messages.some(m=>m.id==='archived-fixture-1')})");
+      throw new Error(error.message+' '+JSON.stringify(result));
+    }
+    await call('reorder',[accounts[1].id,me]);
+    await until(()=>ui("[...document.querySelectorAll('#accounts .account')].map(b=>b.dataset.account).join()==="+JSON.stringify(accounts[1].id+','+me)));
+    await call('reorder',[me,accounts[1].id]);
+    await ui("get('open-settings').click()");
+    await until(()=>ui("get('settings-dialog').open && get('template-list').textContent.includes('发货说明') && document.querySelector('[data-pref=notify]').checked && get('settings-version').textContent.startsWith('HaiA ')"));
+    const releases = require('../src/main/release-check.cjs'), checkRelease = releases.checkRelease;
+    try {
+      releases.checkRelease = current => checkRelease(current,async () => Response.json({tag_name:'v0.10.0'}));
+      await ui("get('check-update').click()");
+      await until(()=>ui("get('update-status').textContent.includes('0.10.0') && !get('update-download').hidden"));
+    } finally { releases.checkRelease = checkRelease; }
+    await ui("const box=document.querySelector('[data-pref=sound]');box.checked=false;box.dispatchEvent(new Event('change',{bubbles:true}))");
+    await until(async()=>(await call('preferences')).sound===false);
+    await call('savePreferences',{sound:true,templates:[]});
+    await ui("get('settings-close').click()");
+    console.log('PASS: unread divider, jump button, drafts, quick replies, search, starred, multi-select, mentions, message info, timer, reorder and preferences');
     console.log('PASS: location, contact card, poll votes, links, stars, labels, calls, status, group members, chat menu and archive');
+    if (process.env.RELAY_PERF) {
+      // Performance probe: the same steps are run before and after an optimisation and the printed numbers compared.
+      const perfChat='perf@c.us', MB=1048576;
+      const memory=()=>app.getAppMetrics().reduce((sum,p)=>sum+p.memory.workingSetSize,0)/1024;
+      const measure=async work=>{
+        const base=memory(); let peak=base; const timer=setInterval(()=>{peak=Math.max(peak,memory());},40); const start=Date.now();
+        try { const value=await work(); return {ms:Date.now()-start,peakMB:Math.round(peak-base),value}; } finally { clearInterval(timer); }
+      };
+      await a.executeJavaScript(`(() => {
+        const contact={id:'${perfChat}',formattedTitle:'性能测试'}; chats.set(contact.id,contact);
+        const thumb='A'.repeat(30000);
+        for (let i=0;i<140;i++) {
+          const picture=i%2===0;
+          const msg={body:picture ? thumb : '第 '+i+' 条消息，用于测量渲染耗时。',id:{_serialized:'false_${perfChat}_P'+i,remote:contact.id,fromMe:false},type:picture ? 'image' : 'chat',
+            caption:picture ? '图 '+i : undefined,mimetype:'image/jpeg',t:now-5000+i*70};
+          rows.push(msg); events.get('chat.new_message')(msg);
+        }
+        blobs.set('false_${perfChat}_VIDEO','big:'+40*1048576);
+        const video={body:'',id:{_serialized:'false_${perfChat}_VIDEO',remote:contact.id,fromMe:false},type:'video',mimetype:'video/mp4',caption:'大视频',size:40*1048576,t:now+900};
+        rows.push(video); events.get('chat.new_message')(video);
+      })()`);
+      await until(async()=>(await call('state')).feed?.messages.some(m=>m.chat===perfChat) || (await call('state')).messages.some(m=>m.chat===perfChat));
+      await call('openChat',me,perfChat);
+      await until(()=>ui("document.querySelectorAll('#bubbles .message').length>=140"));
+      await pause(1500);
+      const renderPerf=await ui(`(async()=>{
+        let added=0; const watch=new MutationObserver(list=>{for(const m of list) added+=m.addedNodes.length;});
+        watch.observe(get('bubbles'),{childList:true,subtree:true});
+        const rounds=40, start=performance.now();
+        for (let i=0;i<rounds;i++) render({...state,thread:{...state.thread,presence:{state:i%2 ? 'composing' : 'available',who:''}}});
+        const ms=(performance.now()-start)/rounds;
+        await new Promise(r=>setTimeout(r,50)); watch.disconnect();
+        return {renderMs:+ms.toFixed(2),nodesAddedPerUpdate:Math.round(added/rounds),bubbles:document.querySelectorAll('#bubbles .message').length};
+      })()`);
+      // Bytes sent to the window for one update, measured on the channel itself.
+      const sent=[]; const original=shell.send.bind(shell);
+      shell.send=(channel,...args)=>{ if (channel==='desk:update') sent.push(JSON.stringify(args[0]).length); return original(channel,...args); };
+      for (let i=0;i<8;i++) { await a.executeJavaScript("events.get('chat.presence_change')({id:{_serialized:'perf@c.us'},state:"+JSON.stringify(i%2 ? 'composing' : 'available')+",isOnline:true});true"); await pause(1400); }
+      shell.send=original;
+      const updateKB=sent.length ? Math.round(sent.reduce((x,y)=>x+y,0)/sent.length/1024) : null;
+      const view=await measure(()=>ui("window.desk.media("+JSON.stringify(me)+",'perf@c.us','false_perf@c.us_VIDEO').then(v=>v.length)"));
+      // After the fix the window receives an address; the bytes are checked through the same protocol the window uses.
+      const address=await ui("window.desk.media("+JSON.stringify(me)+",'perf@c.us','false_perf@c.us_VIDEO')");
+      const served=address.startsWith('haia-media:') ? {bytes:(await (await shell.session.fetch(address)).arrayBuffer()).byteLength,
+        range:await shell.session.fetch(address,{headers:{Range:'bytes=100-199'}}).then(async r=>[r.status,(await r.arrayBuffer()).byteLength,r.headers.get('content-range')])} : null;
+      const big=path.join(dir,'perf-upload.bin'); fs.writeFileSync(big,Buffer.alloc(40*MB,7));
+      shell.debugger.attach('1.3');
+      const {root}=await shell.debugger.sendCommand('DOM.getDocument');
+      const {nodeId}=await shell.debugger.sendCommand('DOM.querySelector',{nodeId:root.nodeId,selector:'#attach-input'});
+      await a.executeJavaScript('window.lastFileBytes=0;true');
+      const send=await measure(async()=>{
+        await shell.debugger.sendCommand('DOM.setFileInputFiles',{nodeId,files:[big]});
+        await until(()=>ui("document.querySelectorAll('.attachment').length===1 && !get('send').disabled"));
+        await ui("get('composer').requestSubmit()");
+        for (let i=0;i<600;i++) { if (await a.executeJavaScript('window.lastFileBytes')>0) break; await pause(100); }
+        return a.executeJavaScript('window.lastFileBytes');
+      });
+      shell.debugger.detach();
+      console.log('PERF '+JSON.stringify({render:renderPerf,updateKB,updates:sent.length,viewVideo40MB:{ms:view.ms,peakMB:view.peakMB,resultChars:view.value,served},sendFile40MB:{ms:send.ms,peakMB:send.peakMB,bytesReceived:send.value}}));
+    }
     console.log('PASS: native history request, two hidden ciphertext records, recovery by model event and bounded reread');
     console.log('PASS: group authors, group activity, read receipts, emoji, bilingual fallback and draft preview');
     console.log('PASS: late directory rows without previews, unread counts and private number search');

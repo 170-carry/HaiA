@@ -34,7 +34,15 @@ window.relayGroupMessage = (() => {
       case 'subject': return (actor ? actor+' 更改了群名称' : '群名称已更新')+(subject ? '为「'+subject+'」' : '');
       case 'description': return actor ? actor+' 更新了群描述' : '群描述已更新';
       case 'picture': return actor ? actor+' 更新了群头像' : '群头像已更新';
-      case 'announce': case 'restrict': return '群权限设置已更新';
+      case 'announce': return (actor || '管理员')+' 更改了发言权限，请查看群资料中的「群状态」';
+      case 'restrict': return (actor || '管理员')+' 更改了群资料的修改权限';
+      case 'suspend': case 'suspended': case 'group_suspended': return '此群已被 WhatsApp 停用';
+      case 'unsuspend': case 'unsuspended': case 'group_unsuspended': return '此群已被 WhatsApp 恢复';
+      case 'terminated': return '此群已被 WhatsApp 永久关闭';
+      case 'membership_approval_mode': return '入群审批设置已更新';
+      case 'member_add_mode': return '添加成员的权限已更新';
+      case 'revoke': case 'revoke_invite': return (actor || '管理员')+' 重置了群邀请链接';
+      case 'ephemeral': return '消息定时消失的设置已更新';
       default: return '群系统通知';
     }
   }

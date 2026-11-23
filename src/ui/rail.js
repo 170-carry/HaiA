@@ -22,6 +22,18 @@ function renderRail(state, statuses, select) {
       }
     };
     button.onclick = () => select(account.id);
+    // Accounts can be dragged into another order.
+    button.draggable = true;
+    button.ondragstart = event => { event.dataTransfer.setData('text/account',account.id); event.dataTransfer.effectAllowed = 'move'; };
+    button.ondragover = event => { if ([...event.dataTransfer.types].includes('text/account')) { event.preventDefault(); button.classList.add('drop-target'); } };
+    button.ondragleave = () => button.classList.remove('drop-target');
+    button.ondrop = event => {
+      event.preventDefault(); button.classList.remove('drop-target');
+      const moved = event.dataTransfer.getData('text/account'), order = state.accounts.map(item=>item.id).filter(id=>id !== moved);
+      if (!moved || moved === account.id) return;
+      order.splice(order.indexOf(account.id),0,moved);
+      window.desk.reorder(order).catch(()=>{});
+    };
     const tile = document.createElement('span');
     tile.className = 'tile ' + tones.get(account.id);
     tile.append(avatarPhotos.face(account.id,'self'));

@@ -39,6 +39,12 @@ const messageActions = (() => {
     if (message.text && (!message.media || message.media.caption)) items.push(item('copy','复制文字',()=>act(async()=>{
       await navigator.clipboard.writeText(message.text); warning('已复制');
     })));
+    if (message.outgoing && message.ack < 0 && !message.media && message.text) items.unshift(item('refresh','重新发送',()=>act(async()=>{
+      await api.send(message.accountId,message.chat,message.text,null);
+      await api.removeMessage(message.accountId,message.chat,message.id,false).catch(()=>{});
+    })));
+    items.push(item('groups','多选',()=>{ menu.hidePopover(); messageSelect.start(message); }));
+    items.push(item('person','消息详情',()=>{ menu.hidePopover(); messageDetails.open(message); }));
     if (message.media && !message.media.once) items.push(item('download','保存到电脑',()=>{ menu.hidePopover(); messageMedia.save(message); }));
     // WhatsApp accepts edits for about 15 minutes after sending.
     if (message.outgoing && !message.media && ['chat','text',''].includes(message.type) && Date.now()-message.time < 14*60000) {
@@ -81,7 +87,7 @@ const messageActions = (() => {
     return row;
   }
   get('bubbles').addEventListener('click',event => {
-    const row = event.target.closest('.message[data-id]'), message = row && find(row.dataset.id);
+    const row = event.target.closest('[data-id]'), message = row && find(row.dataset.id);
     if (!message) return;
     const url = event.target.closest('.text-link')?.dataset.url;
     if (url) { run(()=>api.openExternal(url)); return; }
@@ -91,15 +97,15 @@ const messageActions = (() => {
       const origin = get('bubbles').querySelector('[data-stanza="'+CSS.escape(message.quote.id)+'"]');
       if (!origin) { warning('被引用的消息尚未加载'); return; }
       origin.scrollIntoView({block:'center',behavior:'smooth'});
-      origin.classList.add('found'); setTimeout(()=>origin.classList.remove('found'),1600);
+      origin.classList.add('flash'); setTimeout(()=>origin.classList.remove('flash'),1600);
     } else if (tool?.dataset.act === 'reply') composerExtras.reply(message);
     else if (tool?.dataset.act === 'react') openReactions(message,tool);
     else if (tool?.dataset.act === 'more') openMore(message,tool);
   });
   get('bubbles').addEventListener('contextmenu',event => {
-    const row = event.target.closest('.message[data-id]'), message = row && find(row.dataset.id);
+    const row = event.target.closest('[data-id]'), message = row && find(row.dataset.id);
     if (!message || getSelection().toString()) return;
-    event.preventDefault(); openMore(message,row.querySelector('.message-body'));
+    event.preventDefault(); openMore(message,row.querySelector('.message-body') || row);
   });
   menu.onkeydown = event => {
     const buttons = [...menu.querySelectorAll('button')], i = buttons.indexOf(document.activeElement);

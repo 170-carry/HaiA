@@ -32,6 +32,12 @@ const composerTools = (() => {
     try {
       const result = await api.translate(source,'draft');
       if (ticket !== revision || route !== key || get('reply').value !== source) return;
+      if (translateKey.mode() === 'replace') {
+        // Typed in as an edit, so undo brings the original wording back.
+        const field=get('reply'); field.focus(); field.select();
+        if (!document.execCommand('insertText',false,result.text)) { field.value=result.text; field.dispatchEvent(new Event('input')); }
+        return;
+      }
       suggestion=result.text; get('draft-result').textContent=result.text; proposal.hidden=false;
     } catch (e) { if (ticket === revision) warning(translationError(e)); }
     finally { if (ticket === revision) get('draft-translate').disabled=false; }

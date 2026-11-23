@@ -29,7 +29,42 @@ function pollOf(item) {
 class Inbox {
   conversations = new Conversations();
   byAccount = new Map();
+  byChat = new Map();
   early = new Map();
+  // Ids of one conversation, so a thread is read without scanning the whole account.
+  chatIds(accountId, chat, create = false) {
+    let chats = this.byChat.get(accountId);
+    if (!chats) { if (!create) return null; this.byChat.set(accountId, chats = new Map()); }
+    let ids = chats.get(chat);
+    if (!ids && create) chats.set(chat, ids = new Set());
+    return ids || null;
+  }
+  // Long sessions would otherwise grow without bound. The oldest messages go first; WhatsApp still has them
+  // and "load earlier messages" brings them back.
+  trim(accountId, chat) {
+    const bucket = this.byAccount.get(accountId), ids = this.chatIds(accountId,chat);
+    const drop = (list, keep) => {
+      const latest = new Set([...(this.conversations.latest.get(accountId)?.values() || [])].map(m=>m.id));
+      list.sort((a,b)=>a.time-b.time);
+      for (const message of list.slice(0,list.length-keep)) if (!latest.has(message.id)) {
+        bucket.delete(message.id); this.chatIds(accountId,message.chat)?.delete(message.id);
+      }
+    };
+    if (ids && ids.size > Inbox.chatLimit) drop([...ids].map(id=>bucket.get(id)).filter(Boolean), Math.floor(Inbox.chatLimit*0.8));
+    if (bucket.size > Inbox.accountLimit) drop([...bucket.values()], Math.floor(Inbox.accountLimit*0.8));
+  }
+  // What goes to the window for an open thread. A preview image is sent with the first update that carries its
+  // message; later updates only say that it was sent, and the window keeps its copy.
+  deliver(messages, seen) {
+    return messages.map(message => {
+      const media = message.media?.thumb, link = message.link?.thumb;
+      if (!media && !link) return message;
+      const known = seen.has(message.id);
+      seen.add(message.id);
+      if (!known) return message;
+      return {...message, ...(media ? {media:{...message.media,thumb:'',kept:true}} : {}), ...(link ? {link:{...message.link,thumb:'',kept:true}} : {})};
+    });
+  }
   receipt(accountId,id,ack) {
     if (!Number.isInteger(ack) || ack > 4) return false;
     const msg = this.find(accountId,id);
@@ -47,7 +82,7 @@ class Inbox {
   add(accountId, messages) {
     let bucket = this.byAccount.get(accountId);
     if (!bucket) this.byAccount.set(accountId, bucket = new Map());
-    const added = [];
+    const added = [], touched = new Set();
     for (const item of messages) {
       if (!item || typeof item.id !== 'string' || typeof item.chat !== 'string' ||
           typeof item.text !== 'string' || !Number.isFinite(item.time)) continue;
@@ -73,7 +108,12 @@ class Inbox {
       message.link = linkOf(item.link);
       message.poll = pollOf(item.poll);
       message.starred = item.starred === true;
+      message.mentions = Array.isArray(item.mentions) ? item.mentions.slice(0,30).map(name => text(name,80)).filter(Boolean) : [];
+      message.mentionsMe = item.mentionsMe === true;
+      message.ephemeral = Number.isFinite(item.ephemeral) && item.ephemeral > 0 ? item.ephemeral : 0;
       bucket.set(message.id, message);
+      this.chatIds(accountId,message.chat,true).add(message.id);
+      touched.add(message.chat);
       this.receipt(accountId,message.id,item.ack);
       this.receipt(accountId,message.id,this.early.get(accountId)?.get(message.id));
       this.early.get(accountId)?.delete(message.id);
@@ -82,6 +122,7 @@ class Inbox {
       } else this.conversations.observe(message, item.latestInChat, item.live);
       added.push({ message, notify: !previous && item.notify === true && !message.outgoing });
     }
+    for (const chat of touched) this.trim(accountId,chat);
     return added;
   }
   // Later events for a known message: revoke, edit, reactions and local deletion.
@@ -90,6 +131,7 @@ class Inbox {
     if (!message || !change || typeof change !== 'object') return false;
     if (change.removed === true) {
       this.byAccount.get(accountId).delete(id);
+      this.chatIds(accountId,message.chat)?.delete(id);
       return true;
     }
     if (change.revoked === true) {
@@ -106,13 +148,17 @@ class Inbox {
     return true;
   }
   find(accountId, id) { return this.byAccount.get(accountId)?.get(id); }
-  clear(accountId) { this.early.delete(accountId); this.byAccount.delete(accountId); this.conversations.clear(accountId); }
+  clear(accountId) { this.early.delete(accountId); this.byAccount.delete(accountId); this.byChat.delete(accountId); this.conversations.clear(accountId); }
   page(limit, accountId = null, chat = null) {
-    const maps = accountId ? [this.byAccount.get(accountId) || new Map()] : this.byAccount.values();
-    const all = Array.from(maps).flatMap(map => Array.from(map.values()).filter(m => !chat || m.chat === chat));
+    const bucket = accountId && this.byAccount.get(accountId);
+    const maps = accountId ? [bucket || new Map()] : this.byAccount.values();
+    const all = accountId && chat ? [...(this.chatIds(accountId,chat) || [])].map(id=>bucket?.get(id)).filter(Boolean) :
+      Array.from(maps).flatMap(map => Array.from(map.values()).filter(m => !chat || m.chat === chat));
     const visible = all.filter(message=>!message.pendingText);
     visible.sort((a, b) => b.time - a.time || a.accountId.localeCompare(b.accountId) || ((b.rowId ?? b.sequence) - (a.rowId ?? a.sequence)));
     return { messages: visible.slice(0, limit), count: visible.length, missingCount:all.length-visible.length };
   }
 }
+Inbox.chatLimit = 1500;
+Inbox.accountLimit = 30000;
 module.exports = { Inbox };

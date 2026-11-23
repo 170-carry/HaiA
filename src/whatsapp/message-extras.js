@@ -39,17 +39,48 @@ window.relayExtras = (() => {
     return (data?.reactions || []).slice(0,20).map(item => ({emoji:String(item.aggregateEmoji || ''),
       count:item.senders?.length || 0, mine:Boolean(item.hasReactionByMe)})).filter(item=>item.emoji && item.count);
   }
-  async function download(id) {
+  // Downloads and uploads cross to the desktop app in pieces, so a large file is never one giant string.
+  const staged = new Map(), uploads = new Map();
+  let serial = 0;
+  const base64 = blob => new Promise((resolve,reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(',') + 1));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  async function open(id) {
     const msg = await WPP.chat.getMessageById(id);
     const blob = await WPP.chat.downloadMedia(id);
-    if (!blob || blob.size > 64000000) throw new Error('文件超过 64 MB');
-    const data = await new Promise((resolve,reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    return {mime:String(msg?.mimetype || blob.type || ''), name:String(msg?.filename || ''), data};
+    if (!blob) throw new Error('文件下载失败');
+    const token = 'd' + (++serial);
+    staged.set(token,blob);
+    setTimeout(() => staged.delete(token),600000);
+    return {token, size:blob.size, mime:String(msg?.mimetype || blob.type || ''), name:String(msg?.filename || '')};
+  }
+  function piece(token, offset, length) {
+    const blob = staged.get(token);
+    if (!blob) throw new Error('文件下载已过期，请重试');
+    return base64(blob.slice(offset,offset + length));
+  }
+  function uploadOpen() {
+    const token = 'u' + (++serial);
+    uploads.set(token,[]);
+    setTimeout(() => uploads.delete(token),1800000);
+    return token;
+  }
+  function uploadPiece(token, data) {
+    const parts = uploads.get(token);
+    if (!parts) throw new Error('上传已过期，请重新发送');
+    const text = atob(data), bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
+    parts.push(bytes);
+    return true;
+  }
+  function uploadTake(token, name, mime) {
+    const parts = uploads.get(token);
+    uploads.delete(token);
+    if (!parts?.length) throw new Error('上传已过期，请重新发送');
+    return new File(parts,name,{type:mime});
   }
   function presence(event) {
     const chat = event?.id?._serialized || event?.id?.toString();
@@ -59,5 +90,5 @@ window.relayExtras = (() => {
     return [chat,{state:['composing','recording'].includes(state) ? state : event.isOnline ? 'available' : '',
       who:String(busy?.shortName || '').slice(0,80)}];
   }
-  return {media,describe,quote,reactions,download,presence};
+  return {media,describe,quote,reactions,open,piece,close:token=>staged.delete(token),uploadOpen,uploadPiece,uploadTake,uploadClose:token=>uploads.delete(token),presence};
 })();

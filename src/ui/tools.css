@@ -4,7 +4,7 @@
 #health:hover > i { background:var(--active); }
 #health.alert > i { color:#ffb14a; }
 #health-count { position:absolute; right:8%; bottom:0; border:2px solid var(--nav); border-radius:12px; background:#da3744; color:white; font:bold 10px/14px system-ui; padding-inline:4px; }
-.account-rail nav { margin-bottom:114px; max-height:calc(100% - 114px); }
+.account-rail nav { margin-bottom:162px; max-height:calc(100% - 162px); }
 #health-dialog { width:min(480px,94vw); }
 #health-summary { font-size:12px; margin:4px 0 6px; }
 #health-list { max-height:56vh; overflow:auto; }

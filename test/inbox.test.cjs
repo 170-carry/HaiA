@@ -72,3 +72,25 @@ test('later events patch known messages and unknown fields are dropped', () => {
   inbox.patch('one','m1',{removed:true});
   assert.equal(inbox.page(5,'one','c').count,0);
 });
+
+test('a busy conversation is capped, preview images are sent once and archived chats are counted without building pages', () => {
+  const inbox = new Inbox();
+  const thumb = 'data:image/jpeg;base64,' + 'A'.repeat(64);
+  inbox.add('one',[{id:'pic',chat:'c',title:'t',text:'图',time:1,media:{kind:'image',thumb}}]);
+  for (let batch = 0; batch < 4; batch++) inbox.add('one',Array.from({length:500},(_,i)=>({id:batch+'-'+i,chat:'busy',title:'忙',text:'x',time:10+batch*500+i})));
+  assert.ok(inbox.page(5000,'one','busy').count <= Inbox.chatLimit);
+  assert.equal(inbox.page(1,'one','busy').messages[0].id,'3-499');
+  assert.equal(inbox.find('one','0-0'),undefined);
+  assert.equal(inbox.page(10,'one','c').count,1);
+  const seen = new Set(), page = inbox.page(10,'one','c').messages;
+  assert.equal(inbox.deliver(page,seen)[0].media.thumb,thumb);
+  const again = inbox.deliver(page,seen)[0];
+  assert.deepEqual([again.media.thumb,again.media.kept],['',true]);
+  assert.equal(inbox.find('one','pic').media.thumb,thumb);
+  assert.equal(inbox.conversations.page(10,null).messages.find(m=>m.chat==='c').media.thumb,undefined);
+  inbox.conversations.setFlag('one','c','archived',true);
+  inbox.conversations.setFlag('one','ghost','archived',true);
+  assert.equal(inbox.conversations.archivedCount(null),1);
+  inbox.patch('one','pic',{removed:true});
+  assert.equal(inbox.page(10,'one','c').count,0);
+});

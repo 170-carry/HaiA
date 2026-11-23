@@ -62,12 +62,13 @@
     const groupSender = remote.endsWith('@g.us') ? window.relayGroupMessage.sender(msg) : null;
     const notice = window.relaySystemNotice(msg);
     const text = notice || (pendingText ? '' : ['chat','text'].includes(msg.type) ? msg.body : (window.relayExtras.describe(msg) || msg.caption || msg.filename || labels[msg.type] || (msg.type ? '消息类型：' + msg.type : '暂无消息内容')));
+    const mention = window.relayMore.mentions(msg, typeof text === 'string' ? text : '');
     const mute = chat?.muteExpiration;
     const system = ['gp2','notification','notification_template','e2e_notification','protocol'].includes(msg.type);
     const previewable = !pendingText && typeof text === 'string' && Boolean(text.trim()) &&
       (textMessage || Boolean(msg.caption || msg.filename) || (!system && Boolean(labels[msg.type])) || msg.type === 'gp2');
-    return { link:window.relayMore.link(msg), poll:window.relayMore.poll(msg), starred:Boolean(msg.star), media:window.relayExtras.media(msg), quote:window.relayExtras.quote(msg), edited:Boolean(msg.latestEditMsgKey), forwarded:Boolean(msg.isForwarded),
-      ack:Number.isInteger(msg.ack) ? msg.ack : null, system, previewable, type:msg.type, subtype:msg.subtype, translatable:!pendingText && !system && Boolean(['chat','text'].includes(msg.type) ? msg.body : msg.caption), id, rowId:Number.isSafeInteger(msg.rowId) ? msg.rowId : null, chat: remote, title, sender: groupSender?.name || msg.notifyName || msg.author?.user || '', text: String(text || '').slice(0, 65536), time: msg.t * 1000,
+    return { mentions:mention.names, mentionsMe:mention.me, ephemeral:Number(msg.ephemeralDuration) || 0, link:window.relayMore.link(msg), poll:window.relayMore.poll(msg), starred:Boolean(msg.star), media:window.relayExtras.media(msg), quote:window.relayExtras.quote(msg), edited:Boolean(msg.latestEditMsgKey), forwarded:Boolean(msg.isForwarded),
+      ack:Number.isInteger(msg.ack) ? msg.ack : null, system, previewable, type:msg.type, subtype:msg.subtype, translatable:!pendingText && !system && Boolean(['chat','text'].includes(msg.type) ? msg.body : msg.caption), id, rowId:Number.isSafeInteger(msg.rowId) ? msg.rowId : null, chat: remote, title, sender: groupSender?.name || msg.notifyName || msg.author?.user || '', text: String((mention.names.length ? mention.text : text) || '').slice(0, 65536), time: msg.t * 1000,
       senderId: groupSender?.id || msg.author?._serialized || msg.author?.toString() || null, pendingText, outgoing: !!msg.id.fromMe, live, latestInChat: id === chat?.lastReceivedKey?._serialized, notify: live && !system && !pendingText && !msg.id.fromMe && !chat?.isMuted && !(mute === -1 || mute > Date.now()/1000) };
   }
   WPP.loader.onReady(() => {
@@ -126,6 +127,7 @@
     });
   });
   window.relayReader = {
+    ...window.createHistorySearch(format),
     take() {
       let status = 'loading';
       if (loaderReady) {
@@ -176,7 +178,14 @@
       if (active) await WPP.chat.markIsComposing(chatId,5000); else await WPP.chat.markIsPaused(chatId);
       return true;
     },
-    media: id => window.relayExtras.download(id),
+    mediaOpen:window.relayExtras.open, mediaPiece:window.relayExtras.piece, mediaClose:window.relayExtras.close,
+    uploadOpen:window.relayExtras.uploadOpen, uploadPiece:window.relayExtras.uploadPiece, uploadClose:window.relayExtras.uploadClose,
+    async uploadSend(chatId, token, file) {
+      const content = window.relayExtras.uploadTake(token,file.name,file.mime);
+      const result = await WPP.chat.sendFileMessage(chatId, content, { type:file.kind === 'ptt' ? 'audio' : file.kind || 'auto-detect', isPtt:file.kind === 'ptt', filename:file.name, mimetype:file.mime, caption:file.caption || undefined, mentionedList:file.mentions,
+        waitForAck:false, ...(file.quote ? {quotedMsg:file.quote} : {}) });
+      return this.sent(result,chatId,file.caption || file.name);
+    },
     async react(id, emoji) {
       await WPP.chat.sendReactionToMessage(id, emoji || false);
       await loadReactions(id);
@@ -188,8 +197,8 @@
       changes.push([id,everyone ? {revoked:true} : {removed:true}]);
       return true;
     },
-    async edit(id, text) {
-      await WPP.chat.editMessage(id,text,{linkPreview:false});
+    async edit(id, text, mentions) {
+      await WPP.chat.editMessage(id,text,{linkPreview:false,mentionedList:mentions});
       changes.push([id,{text,edited:true}]);
       return true;
     },
@@ -208,11 +217,12 @@
       return this.sent(await window.relayMore.special(chatId,kind,data),chatId,labels[kind]);
     },
     async star(id, on) { await WPP.chat.starMessage(id,on); changes.push([id,{starred:on}]); return true; },
+    messageInfo:window.relayMore.messageInfo, setEphemeral:window.relayMore.setEphemeral,
     chatLabels:window.relayMore.labels, setLabel:window.relayMore.setLabel, groupMembers:window.relayMore.members,
     statusList:window.relayMore.statusList, statusItems:window.relayMore.statusItems, statusPost:window.relayMore.statusPost,
     callStart:window.relayMore.calls.start, callAccept:window.relayMore.calls.accept, callEnd:window.relayMore.calls.end, callMute:window.relayMore.calls.mute,
-    async send(chatId, text, quoted) {
-      const result = await WPP.chat.sendTextMessage(chatId, text, { linkPreview: /https?:\/\/\S+/i.test(text), waitForAck: false, ...(quoted ? {quotedMsg:quoted} : {}) });
+    async send(chatId, text, quoted, mentions) {
+      const result = await WPP.chat.sendTextMessage(chatId, text, { linkPreview: /https?:\/\/\S+/i.test(text), waitForAck: false, detectMentioned: chatId.endsWith('@g.us'), mentionedList:mentions, ...(quoted ? {quotedMsg:quoted} : {}) });
       return this.sent(result,chatId,text);
     },
     async forward(chatId, id) {
@@ -228,7 +238,7 @@
       return {chat,title:name,failed};
     },
     async sendFile(chatId, file) {
-      const result = await WPP.chat.sendFileMessage(chatId, file.data, { ...(file.voice ? {type:'audio',isPtt:true} : {type:'auto-detect'}), filename:file.name, caption:file.caption || undefined,
+      const result = await WPP.chat.sendFileMessage(chatId, file.data, { ...(file.voice ? {type:'audio',isPtt:true} : {type:'auto-detect'}), filename:file.name, caption:file.caption || undefined, mentionedList:file.mentions,
         waitForAck:false, ...(file.quote ? {quotedMsg:file.quote} : {}) });
       return this.sent(result,chatId,file.caption || file.name);
     }

@@ -25,10 +25,11 @@ const contactDetails = (() => {
     button.append(icon(symbol),el('span','',label),el('i','switch'));
     button.onclick = () => {
       const work = async () => {
-        const next = !info[name];
+        // The answer may arrive after another conversation was opened; it then belongs to the details read earlier.
+        const details = info, chat = target, next = !details[name];
         button.disabled = true;
-        try { await api.chatSetting(target.account,target.chat,name,next); info[name] = next; }
-        finally { draw(); }
+        try { await api.chatSetting(chat.account,chat.chat,name,next); details[name] = next; }
+        finally { if (info === details) draw(); }
       };
       if (name === 'blocked' && !info.blocked) {
         get('action-title').textContent = '屏蔽联系人'; get('action-detail').textContent = '屏蔽后，对方将无法给这个账号发送消息或拨打电话。';
@@ -56,6 +57,20 @@ const contactDetails = (() => {
     chips.append(input); wrap.append(chips);
     return wrap;
   }
+  // Shows why the composer is locked: the group is suspended, admin-only, or this number has left or blocked the chat.
+  function limit() {
+    const limits = info?.limits, muted = limits?.announce && !limits.admin;
+    const reason = !info ? '' : limits?.terminated ? '此群已被 WhatsApp 永久关闭，无法发送消息。' : limits?.suspended ? '此群已被 WhatsApp 停用，无法发送消息。' :
+      limits?.left ? '你已不在此群中，无法发送消息。' : muted ? '此群已开启全员禁言，仅管理员可以发送消息。' :
+      info.blocked ? '你已屏蔽此联系人，取消屏蔽后才能发送消息。' : limits?.blocked ? 'WhatsApp 不允许在此会话中发送消息。' : '';
+    const tag = limits?.terminated ? '已关闭' : limits?.suspended ? '已停用' : limits?.left ? '已退出' : limits?.announce ? '全员禁言' : '';
+    get('chat-limit').hidden = !tag; get('chat-limit').textContent = tag;
+    get('chat-notice').hidden = !reason && !(limits?.announce && limits.admin);
+    get('chat-notice').textContent = reason || '此群已开启全员禁言，你是管理员，仍可发言。';
+    const locked = Boolean(reason);
+    if (get('composer').classList.toggle('locked',locked) !== lockedBefore) { lockedBefore = locked; get('reply').dispatchEvent(new Event('input')); }
+  }
+  let lockedBefore = false;
   function draw() {
     const group = target?.chat.endsWith('@g.us');
     const named = Boolean(info?.remark);
@@ -64,9 +79,21 @@ const contactDetails = (() => {
     get('reader-phone').textContent = named ? info.phone : '';
     get('profile-kind').textContent = group ? 'WhatsApp 群聊' + (info?.members ? ' · ' + info.members + ' 位成员' : '') :
       [info?.phone,info?.business ? '商业账号' : ''].filter(Boolean).join(' · ') || 'WhatsApp 会话';
+    if (!info) limit();
     if (!info) { box.replaceChildren(el('p','detail-note',failed ? '暂时无法读取资料，请稍后重试。' : '正在读取资料…')); return; }
     const rows = [];
+    limit();
     if (group) {
+      const states = info.limits ? [[info.limits.suspended,'已被 WhatsApp 停用'],[info.limits.terminated,'已被 WhatsApp 永久关闭'],[info.limits.left,'你已不在此群中'],
+        [info.limits.announce,'全员禁言 · 仅管理员可发言'],[info.limits.restrict,'仅管理员可修改群资料'],[info.limits.approval,'新成员需管理员批准'],
+        [info.limits.admin,'你是管理员']].filter(([on])=>on).map(([,label])=>label) : [];
+      if (states.length) {
+        const row = el('div','detail');
+        row.append(el('span','detail-label','群状态'));
+        const list = el('ul','limit-list');
+        for (const label of states) list.append(el('li',/停用|关闭|不在|禁言/.test(label) ? 'warn' : '',label));
+        row.append(list); rows.push(row);
+      }
       if (info.description) rows.push(field('群描述',info.description));
       if (info.created) rows.push(field('创建时间',new Date(info.created).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'})));
     } else {
@@ -90,6 +117,24 @@ const contactDetails = (() => {
         }
         rows.push(list);
       }
+    }
+    {
+      const options = [[0,'关闭'],[86400,'24 小时'],[604800,'7 天'],[7776000,'90 天']];
+      const row = el('div','detail');
+      row.append(el('span','detail-label','消息定时消失'));
+      if (!group || info.limits?.admin || !info.limits?.restrict) {
+        const select = el('select','detail-select');
+        select.replaceChildren(...options.map(([value,label]) => new Option(label,String(value))));
+        if (!options.some(([value]) => value === info.ephemeral)) select.append(new Option(Math.round(info.ephemeral/86400)+' 天',String(info.ephemeral)));
+        select.value = String(info.ephemeral);
+        select.setAttribute('aria-label','消息定时消失');
+        select.onchange = () => { const details = info, chat = target, seconds = Number(select.value); select.disabled = true; run(async()=>{
+          try { await api.setEphemeral(chat.account,chat.chat,seconds); details.ephemeral = seconds; }
+          finally { if (info === details) draw(); }
+        }); };
+        row.append(select);
+      } else row.append(el('span','detail-value',(options.find(([value]) => value === info.ephemeral)?.[1] || Math.round(info.ephemeral/86400)+' 天')));
+      rows.push(row);
     }
     const switches = el('div','switches');
     switches.append(toggle('bell','静音通知','muted'),toggle('pin','置顶聊天','pinned'),toggle('archive','归档聊天','archived'));
@@ -115,14 +160,14 @@ const contactDetails = (() => {
     } catch (error) { get('remark-error').textContent = '保存失败：' + translationError(error); }
     finally { get('remark-form').querySelector('.primary').disabled = false; }
   };
-  return {show(owner, thread) {
-    // A changed title means the contact was renamed, so the details are read again.
-    const next = JSON.stringify([owner.id,thread.chat,owner.status === 'online',thread.title]);
+  return {show(owner, thread, notice) {
+    // A changed title or a new group notice means the details may have changed, so they are read again.
+    const next = JSON.stringify([owner.id,thread.chat,owner.status === 'online',thread.title,notice]);
     if (next === key) return;
     const same = target?.account === owner.id && target.chat === thread.chat;
     key = next; target = {account:owner.id,chat:thread.chat}; failed = owner.status !== 'online';
     if (!same) info = labels = null;
     draw();
     if (!failed) void load();
-  }, hide() { if (dialog.open) dialog.close(); key = target = info = null; get('remark-edit').hidden = get('reader-phone').hidden = true; }};
+  }, hide() { if (dialog.open) dialog.close(); key = target = info = null; limit(); get('remark-edit').hidden = get('reader-phone').hidden = true; }};
 })();

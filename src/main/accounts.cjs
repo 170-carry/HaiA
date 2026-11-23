@@ -28,6 +28,10 @@ class Accounts {
     Object.assign(item, patch);
     this.save(this.items);
   }
+  reorder(ids) {
+    const order = new Map(ids.map((id,index) => [id,index]));
+    this.save([...this.items].sort((a,b) => (order.get(a.id) ?? 1e6) - (order.get(b.id) ?? 1e6)));
+  }
   remove(id) {
     this.save(this.items.filter(item => item.id !== id));
   }

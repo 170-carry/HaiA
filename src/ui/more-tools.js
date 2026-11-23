@@ -34,10 +34,12 @@ const attachMenu = (() => {
   get('special-cancel').onclick = () => dialog.close();
   get('attach').onclick = () => {
     const items = [['clip','图片或文件',()=>{ menu.hidePopover(); composerExtras.pick(); }],['pin','位置',()=>open('location')],
-      ['person','联系人名片',()=>open('contact')],['poll','投票',()=>open('poll')]].map(([symbol,label,work]) => {
+      ['person','联系人名片',()=>open('contact')],['poll','投票',()=>open('poll')],['chat','快捷回复',()=>{ menu.hidePopover(); quickReplies.open(); }],
+      ...(get('record').checkVisibility() ? [] : [['mic','语音消息',()=>{ menu.hidePopover(); get('record').click(); }],['wave','语音输入',()=>{ menu.hidePopover(); get('dictate').click(); }]])].map(([symbol,label,work]) => {
       const button = el('button'); button.type = 'button'; button.setAttribute('role','menuitem');
       button.append(icon(symbol),label); button.onclick = work; return button;
     });
+    delete menu.dataset.kind;
     menu.replaceChildren(...items); menu.showPopover();
     const box = get('attach').getBoundingClientRect(), own = menu.getBoundingClientRect();
     menu.style.left = Math.max(8,box.left)+'px'; menu.style.top = Math.max(8,box.top-own.height-6)+'px';
@@ -198,4 +200,148 @@ const chatMenu = (() => {
     if (step) { event.preventDefault(); buttons[(i+step+buttons.length)%buttons.length].focus(); }
   });
   return {open};
+})();
+// Composer button that shows which number answers, and switches to another linked number.
+const replyAccount = (() => {
+  const button = get('reply-account'), menu = get('attach-menu');
+  let shown = '';
+  button.onclick = () => {
+    if (!state?.thread) return;
+    const tones = accountTones(state.accounts), group = state.thread.chat.endsWith('@g.us');
+    const items = state.accounts.map(account => {
+      const item = el('button','reply-option'); item.type = 'button'; item.setAttribute('role','menuitemradio');
+      item.setAttribute('aria-checked',String(account.id === state.active));
+      item.disabled = account.status !== 'online';
+      const tile = el('span','avatar '+tones.get(account.id)); tile.append(avatarPhotos.face(account.id,'self'));
+      const words = el('span','reply-words');
+      words.append(el('strong','',account.name),el('small','',account.status === 'online' ? account.linkedPhone || '已连接' : statusText[account.status] || account.status));
+      item.append(tile,words);
+      item.onclick = () => { menu.hidePopover(); run(()=>api.replyAs(account.id,state.thread.chat)); };
+      return item;
+    });
+    menu.replaceChildren(el('strong','chat-menu-title',group ? '选择回复账号（需在此群中）' : '选择用哪个账号回复'),...items);
+    menu.showPopover();
+    const box = button.getBoundingClientRect(), own = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8,box.left)+'px'; menu.style.top = Math.max(8,box.top-own.height-6)+'px';
+    (items.find(item=>item.getAttribute('aria-checked') === 'true') || items[0])?.focus({preventScroll:true});
+  };
+  return {render(s, owner) {
+    const key = JSON.stringify([owner?.id,owner?.name,owner?.photoIdentity,s.accounts.length]);
+    if (key === shown) return;
+    shown = key;
+    button.className = 'avatar ' + (owner ? accountTones(s.accounts).get(owner.id) : '');
+    button.replaceChildren(owner ? avatarPhotos.face(owner.id,'self') : icon('person'));
+    button.title = '使用 ' + (owner?.name || '') + ' 回复' + (s.accounts.length > 1 ? ' · 点击切换账号' : '');
+    button.setAttribute('aria-label',button.title);
+  }};
+})();
+// Which key sends a message. Right-click the send button to change it.
+const sendKey = (() => {
+  const button = get('send'), menu = get('attach-menu'), mod = api.platform === 'darwin' ? '⌘' : 'Ctrl';
+  const mode = () => { try { return localStorage.getItem('send-key') === 'mod' ? 'mod' : 'enter'; } catch { return 'enter'; } };
+  function label() {
+    button.title = mode() === 'enter' ? '发送（Enter 发送，Shift + Enter 换行）· 右键更改' : '发送（'+mod+' + Enter 发送，Enter 换行）· 右键更改';
+  }
+  button.oncontextmenu = event => {
+    event.preventDefault();
+    const items = [['enter','Enter 发送，Shift + Enter 换行'],['mod',mod+' + Enter 发送，Enter 换行']].map(([value,text]) => {
+      const item = el('button','reply-option',text); item.type = 'button';
+      item.setAttribute('role','menuitemradio'); item.setAttribute('aria-checked',String(mode() === value));
+      item.onclick = () => { localStorage.setItem('send-key',value); label(); menu.hidePopover(); get('reply').focus(); };
+      return item;
+    });
+    menu.replaceChildren(el('strong','chat-menu-title','发送快捷键'),...items);
+    menu.showPopover();
+    const box = button.getBoundingClientRect(), own = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8,box.right-own.width)+'px'; menu.style.top = Math.max(8,box.top-own.height-6)+'px';
+    items[0].focus({preventScroll:true});
+  };
+  label();
+  return {mode,label,combo:()=>mod};
+})();
+// Draft translation: its shortcut, and whether the translation replaces the draft or is previewed first.
+const translateKey = (() => {
+  const button = get('draft-translate'), menu = get('attach-menu');
+  const read = (name,fallback) => { try { return localStorage.getItem(name) || fallback; } catch { return fallback; } };
+  const mode = () => read('translate-mode','replace') === 'preview' ? 'preview' : 'replace';
+  const combo = () => read('translate-key','Ctrl+W');
+  function describe(event) {
+    if (['Control','Shift','Alt','Meta'].includes(event.key)) return '';
+    const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+    return [event.ctrlKey && 'Ctrl',event.altKey && 'Alt',event.shiftKey && 'Shift',event.metaKey && '⌘',key].filter(Boolean).join('+');
+  }
+  function label() { button.title = '翻译草稿（' + combo().replaceAll('+',' + ') + '）· 右键设置'; }
+  let capturing = false;
+  function capture() {
+    capturing = true; warning('请按下新的翻译快捷键，需包含 Ctrl、Alt 或 ⌘。按 Esc 取消。');
+  }
+  window.addEventListener('keydown',event => {
+    if (capturing) {
+      event.preventDefault(); event.stopPropagation();
+      if (event.key === 'Escape') { capturing = false; warning('已取消，快捷键未更改'); return; }
+      const next = describe(event);
+      if (!next || !(event.ctrlKey || event.altKey || event.metaKey)) return;
+      if (next === 'Ctrl+Enter' || next === '⌘+Enter') { warning('这个组合用于发送消息，请换一个'); return; }
+      capturing = false; localStorage.setItem('translate-key',next); label();
+      settingsPanel.refresh();
+      warning('翻译快捷键已设为 ' + next.replaceAll('+',' + '));
+      return;
+    }
+    if (describe(event) !== combo() || event.isComposing || get('composer').hidden || document.querySelector('dialog[open]')) return;
+    event.preventDefault();
+    if (!button.disabled) button.click();
+  },true);
+  button.oncontextmenu = event => {
+    event.preventDefault();
+    const items = [['replace','直接替换输入框原文'],['preview','先预览，确认后替换']].map(([value,text]) => {
+      const item = el('button','reply-option',text); item.type = 'button';
+      item.setAttribute('role','menuitemradio'); item.setAttribute('aria-checked',String(mode() === value));
+      item.onclick = () => { localStorage.setItem('translate-mode',value); menu.hidePopover(); get('reply').focus(); };
+      return item;
+    });
+    const key = el('button','','快捷键：' + combo().replaceAll('+',' + ') + ' · 点击更改'); key.type = 'button';
+    key.onclick = () => { menu.hidePopover(); capture(); };
+    menu.replaceChildren(el('strong','chat-menu-title','草稿翻译'),...items,key);
+    menu.showPopover();
+    const box = button.getBoundingClientRect(), own = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8,box.right-own.width)+'px'; menu.style.top = Math.max(8,box.top-own.height-6)+'px';
+    items[0].focus({preventScroll:true});
+  };
+  label();
+  return {mode,label,capture,combo};
+})();
+// One place for every preference: send key, draft translation, voice input, translation service and permissions.
+const settingsPanel = (() => {
+  const dialog = get('settings-dialog');
+  const store = (name,value) => { try { localStorage.setItem(name,value); } catch { /* Preferences stay at their defaults. */ } };
+  function refresh() {
+    if (!dialog.open) return;
+    for (const input of dialog.querySelectorAll('input[name=send-key]')) input.checked = input.value === sendKey.mode();
+    for (const input of dialog.querySelectorAll('input[name=translate-mode]')) input.checked = input.value === translateKey.mode();
+    get('settings-mod-label').textContent = sendKey.combo() + ' + Enter 发送，Enter 换行';
+    get('settings-translate-key').textContent = translateKey.combo().replaceAll('+',' + ');
+    const settings = chatTranslation.settings, voice = get('settings-voice');
+    if (settings) {
+      voice.replaceChildren(new Option('不翻译，保留原话','none'),...settings.languages.map(item=>new Option(item.name,item.id)));
+      voice.value = settings.voice || 'en';
+    }
+  }
+  dialog.addEventListener('change',event => {
+    const input = event.target;
+    if (input.name === 'send-key') { store('send-key',input.value); sendKey.label(); }
+    else if (input.name === 'translate-mode') { store('translate-mode',input.value); translateKey.label(); }
+    else if (input.closest('#translation-form')) return;
+    else if (input.id === 'settings-voice') run(async()=>{ chatTranslation.configure(await api.saveVoiceLanguage(input.value)); if (state) render(state); refresh(); });
+  });
+  get('settings-translate-key').onclick = () => { dialog.close(); translateKey.capture(); };
+  get('settings-microphone').onclick = () => run(async()=>{ if (await api.micAccess() !== false) warning('麦克风权限正常'); });
+  get('settings-accounts').onclick = () => { dialog.close(); get('health').click(); };
+  get('settings-close').onclick = () => dialog.close();
+  async function open() {
+    if (!dialog.open) dialog.showModal();
+    refresh();
+    await fillTranslationSettings();
+  }
+  get('open-settings').onclick = () => run(open);
+  return {refresh,open};
 })();

@@ -36,7 +36,10 @@ function renderFeed(state, open) {
     const group = m.chat.endsWith('@g.us');
     if (group) top.firstChild.after(el('span','group-tag','群聊'));
     const prefix = m.system ? '' : m.outgoing ? '我：' : group && m.sender ? m.sender+'：' : '';
-    preview.append(el('span','snippet',m.text ? prefix + m.text : ''));
+    const draft = draftStore.of(m.accountId,m.chat);
+    const snippet = el('span','snippet',draft ? draft : m.text ? prefix + m.text : '');
+    if (draft) snippet.prepend(el('b','draft-mark','草稿：'));
+    preview.append(snippet);
     words.append(top,preview);
     if (m.unreadCount > 0) {
       const badge = el('span','conversation-unread', m.unreadCount > 99 ? '99+' : String(m.unreadCount));

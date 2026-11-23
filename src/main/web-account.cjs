@@ -14,7 +14,7 @@ function adapterSource() {
   if (!adapter) {
     const file = app.isPackaged ? path.join(process.resourcesPath, 'wa-js/dist/wppconnect-wa.js') : require.resolve('@wppconnect/wa-js');
     adapter = 'window.WPPConfig = {disableGoogleAnalytics:true,deviceName:false,linkPreviewApiServers:null};\n' +
-      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','more-tools.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
+      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','history-search.js','private-timer.js','more-tools.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
   }
   return adapter;
 }
@@ -47,7 +47,7 @@ class WebAccount {
     for (const event of ['will-navigate', 'will-redirect']) wc.on(event, (ev, url) => {
       if (!trusted(typeof url === 'string' ? url : url?.url)) ev.preventDefault();
     });
-    const update = status => onBatch(this, { status, messages: [] });
+    const update = status => { this.watch(status); onBatch(this, { status, messages: [] }); };
     wc.on('did-start-navigation', (_ev, details, isInPlace, isMainFrame) => {
       // Current Electron passes details alongside the legacy positional args.
       if (typeof details === 'object' ? (!details.isMainFrame || details.isSameDocument) : (!isMainFrame || isInPlace)) return;
@@ -79,12 +79,23 @@ class WebAccount {
           batch.qr = await wc.executeJavaScript(pairingScript);
           if (batch.qr) batch.status = 'pair';
         }
-        if (!this.disposed && generation === this.generation) onBatch(this, batch);
+        if (!this.disposed && generation === this.generation) { this.watch(batch.status); onBatch(this, batch); }
       } catch {
         if (!this.disposed && generation === this.generation) update('adapter-error');
       } finally { this.busy = false; }
     }, 1200);
     this.load();
+  }
+  // A failed connection is retried on its own: after 5 s, then 15 s, 30 s, 1 min and every 2 min.
+  watch(status) {
+    if (['offline','adapter-error'].includes(status)) {
+      if (this.retry || this.disposed) return;
+      const delay = [5,15,30,60,120][Math.min(this.attempts || 0,4)] * 1000;
+      this.retry = setTimeout(() => { this.retry = null; this.attempts = (this.attempts || 0) + 1; if (!this.disposed) this.load(); }, delay);
+    } else if (status === 'online' || status === 'pair') {
+      this.attempts = 0;
+      clearTimeout(this.retry); this.retry = null;
+    }
   }
   load() {
     this.view.webContents.loadURL(WEB + '/').catch(() => {});
@@ -111,7 +122,17 @@ class WebAccount {
   }
   async call(method, ...args) {
     if (!this.ready || this.status !== 'online' || !trusted(this.view.webContents.getURL())) throw new Error('账号尚未连接');
-    return this.view.webContents.executeJavaScript('window.relayReader.' + method + '(...' + JSON.stringify(args) + ')');
+    try {
+      return await this.view.webContents.executeJavaScript('window.relayReader.' + method + '(...' + JSON.stringify(args) + ')');
+    } catch (error) {
+      // The adapter throws Chinese messages on purpose. Anything else comes from WhatsApp's own code and is explained instead of shown raw.
+      const text = String(error?.message || '').replace(/^.*?Error: /,'');
+      if (/[\u4e00-\u9fff]/.test(text)) throw new Error(text);
+      const known = [[/not a business/i,'此功能仅支持 WhatsApp Business 账号'],[/not.*(participant|member)|forbidden|not.?authorized|403/i,'当前账号没有执行此操作的权限'],
+        [/not.?found|does not exist|404/i,'没有找到对应的会话或消息，可能已被删除'],[/time.?out/i,'WhatsApp 响应超时，请稍后重试'],[/rate|too many|429/i,'操作过于频繁，请稍后再试']]
+        .find(([pattern]) => pattern.test(text));
+      throw new Error(known ? known[1] : 'WhatsApp 未能完成此操作，请稍后重试' + (text ? '（' + text.slice(0,80) + '）' : ''));
+    }
   }
   // Video is drawn by WhatsApp's own call screen, so the hidden page is shown for it.
   reveal() {
@@ -121,6 +142,7 @@ class WebAccount {
   }
   close() {
     this.disposed = true;
+    clearTimeout(this.retry);
     clearInterval(this.poll);
     this.view.destroy();
   }

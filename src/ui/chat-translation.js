@@ -9,7 +9,12 @@ const chatTranslation = (() => {
   },{root:document.getElementById('scroll')});
   let settings, active = 0, generation = 0;
   function resetView() { observer.disconnect(); observed.clear(); }
-  function configure(next) { generation++; entries.clear(); resetView(); settings = next; }
+  // Changed settings invalidate every row, so the rows are rebuilt with fresh translate controls.
+  function configure(next) { generation++; entries.clear(); resetView(); resetMessageRows(); settings = next; }
+  // Rows that left the list no longer need watching.
+  function prune() {
+    for (const button of observed.keys()) if (!button.isConnected) { observer.unobserve(button); observed.delete(button); }
+  }
   function draw(slot) {
     const result = entries.get(slot.key);
     slot.button.disabled = result?.pending === true;
@@ -67,9 +72,9 @@ const chatTranslation = (() => {
     bubble.insertBefore(output,footer);
     if (settings?.auto && slot.auto) observer.observe(button);
   }
-  return {attach,configure,resetView,get settings(){return settings;}};
+  return {attach,configure,resetView,prune,get settings(){return settings;}};
 })();
 function translationError(error) {
-  return (error.message || '翻译失败，请重试').replace(/^.*?Error invoking remote method .*?: Error: /,'');
+  return readable(error);
 }
 

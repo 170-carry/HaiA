@@ -24,7 +24,42 @@ window.relayMore = (() => {
     }
     return Array.from(counts,count=>count || 0);
   }
+  // In message text a mention is "@" followed by the number. It is shown with the person's name instead.
+  function mentions(msg, text) {
+    const list = Array.isArray(msg.mentionedJidList) ? msg.mentionedJidList : [];
+    if (!list.length || typeof text !== 'string') return {text, names:[], me:false};
+    const mine = idOf(WPP.conn.getMyUserId()), names = [];
+    let shown = text, me = false;
+    for (const wid of list.slice(0,30)) {
+      const id = idOf(wid), user = id.split('@')[0];
+      const name = window.relayGroupMessage.sender({author:wid}).name;
+      if (id === mine || name === '你') me = true;
+      if (!user || !name) continue;
+      names.push(name);
+      const escaped = user.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      shown = shown.replace(new RegExp('@'+escaped+'(?![0-9])','g'),()=>'@'+name);
+    }
+    return {text:shown, names, me};
+  }
+  // Who reacted, and for own messages in a group who has received and read them.
+  async function messageInfo(id, own) {
+    const name = wid => window.relayGroupMessage.sender({author:wid}).name || '+' + idOf(wid).split('@')[0];
+    const reacted = await attempt(() => WPP.chat.getReactions(id));
+    const reactions = (reacted?.reactions || []).slice(0,20).map(item => ({emoji:String(item.aggregateEmoji || ''),
+      names:(item.senders || []).slice(0,60).map(sender => name(sender.senderUserJid || sender.id?.participant || sender.id?.remote))}));
+    const receipt = own ? await attempt(() => WPP.chat.getMessageACK(id)) : null;
+    const people = (receipt?.participants || []).slice(0,300).map(p => ({name:name(p.wid || p.id), read:(p.readAt || p.playedAt || 0) * 1000, delivered:(p.deliveredAt || 0) * 1000}));
+    return {reactions, readers:people.filter(p => p.read), delivered:people.filter(p => !p.read && p.delivered),
+      waiting:receipt ? Number(receipt.deliveryRemaining) || 0 : 0};
+  }
+  async function setEphemeral(chatId, seconds) {
+    if (!chatId.endsWith('@g.us')) return window.setPrivateChatTimer(chatId, seconds);
+    if (await WPP.group.setProperty(chatId,'ephemeral',seconds) === false) throw new Error('WhatsApp 未接受这次更改');
+    return true;
+  }
   async function labels(chatId) {
+    // Labels are a WhatsApp Business feature. Personal accounts list defaults but cannot apply them.
+    if (!(await attempt(async () => WPP.profile.isBusiness()))) return null;
     const all = await attempt(() => WPP.labels.getAllLabels());
     if (!Array.isArray(all)) return null;
     const active = new Set((WPP.chat.get(chatId)?.labels || []).map(String));
@@ -101,5 +136,5 @@ window.relayMore = (() => {
     take() { if (!callDirty) return undefined; callDirty = false; return call ? {...call} : null; },
     reset() { if (call) { call = null; callDirty = true; } }
   };
-  return {special,link,poll,votes,labels,setLabel,members,statusList,statusItems,statusPost,calls,listen};
+  return {mentions,messageInfo,setEphemeral,special,link,poll,votes,labels,setLabel,members,statusList,statusItems,statusPost,calls,listen};
 })();

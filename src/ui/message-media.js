@@ -1,7 +1,7 @@
 // Pictures, voice notes, videos and files inside message bubbles.
 const messageMedia = (() => {
   const files = new Map(), nodes = new Map(), waiting = new Map(), queue = [];
-  let used = new Set(), busy = 0;
+  let busy = 0;
   const labels = {image:'图片',sticker:'贴纸',video:'视频',ptt:'语音消息',audio:'音频',document:'文件'};
   const observer = new IntersectionObserver(changes => {
     for (const item of changes) if (item.isIntersecting) { observer.unobserve(item.target); waiting.get(item.target)?.(); }
@@ -25,7 +25,8 @@ const messageMedia = (() => {
       const task = new Promise((resolve,reject)=>queue.push({args:[message.accountId,message.chat,message.id],resolve,reject}));
       task.catch(()=>files.delete(key));
       files.set(key,task);
-      if (files.size > 40) files.delete(files.keys().next().value);
+      // Entries are short addresses now; the files themselves live in the desktop app's disk cache.
+      if (files.size > 400) files.delete(files.keys().next().value);
       pump();
     }
     return files.get(key);
@@ -40,9 +41,12 @@ const messageMedia = (() => {
     if (message.media.thumb) { img.src = message.media.thumb; img.className = 'preview'; }
     button.append(img);
     let full;
-    waiting.set(button,()=>load(message).then(src=>{ full = src; img.src = src; img.className = ''; },()=>{
-      if (!message.media.thumb) button.replaceChildren(el('span','media-note','图片加载失败，点击重试'));
-    }));
+    const failed = el('span','media-failed','加载失败，点击重试');
+    failed.hidden = true; button.append(failed);
+    const show = src => { full = src; img.src = src; img.className = ''; failed.hidden = true; };
+    // The preview stays visible when the full picture cannot be fetched, with a note that says so.
+    waiting.set(button,()=>{ failed.hidden = true; return load(message).then(show,()=>{ failed.hidden = false; }); });
+    img.onerror = () => { if (full) { full = null; if (message.media.thumb) { img.src = message.media.thumb; img.className = 'preview'; } failed.hidden = false; } };
     observer.observe(button);
     button.onclick = () => {
       if (!full) { waiting.get(button)(); return; }
@@ -75,7 +79,6 @@ const messageMedia = (() => {
   }
   function view(message) {
     const key = message.accountId+'\n'+message.id;
-    used.add(key);
     if (nodes.has(key)) return nodes.get(key);
     const media = message.media, box = el('div','media');
     if (media.once) box.append(el('span','media-note','一次性消息，请在手机上查看'));
@@ -93,12 +96,9 @@ const messageMedia = (() => {
     nodes.set(key,box);
     return box;
   }
-  // Nodes are reused across renders so that playback survives incoming updates.
-  function begin() {
-    for (const key of nodes.keys()) if (!used.has(key)) nodes.delete(key);
-    used = new Set();
-  }
   get('viewer-close').onclick = () => get('media-viewer').close();
   get('media-viewer').onclick = event => { if (event.target === get('media-viewer')) get('media-viewer').close(); };
-  return {view,begin,save,size};
+  // Called when another conversation is opened.
+  function reset() { nodes.clear(); waiting.clear(); observer.disconnect(); }
+  return {view,reset,save,size};
 })();

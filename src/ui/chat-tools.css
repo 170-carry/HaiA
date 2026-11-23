@@ -23,10 +23,7 @@
 #draft-proposal { margin:4px 0 8px; border-left:2px solid #72dbb3; padding:6px 10px; background:var(--soft); }
 #draft-result { max-height:16vh; overflow:auto; }
 #draft-proposal button { color:var(--accent-ink); font-size:12px; padding:5px; }
-#translation-dialog { width:min(452px,94vw); max-height:88vh; overflow:auto; padding:22px; }
-#translation-dialog h2 { margin:0 0 16px; }
-#translation-dialog p { font-size:12px; margin:4px 0 12px; }
-#translation-dialog h3 { font-size:14px; margin:16px 0 0; }
+#translation-form p { font-size:12px; margin:4px 0 12px; }
 .auto-setting { display:flex; align-items:center; } #auto-translate { width:auto; margin-right:7px; }
 .language-pair { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .language-pair select { display:block; margin-top:4px; width:100%; padding:7px; color:var(--ink); background:var(--frame); border-radius:6px; border:1px solid var(--line); }

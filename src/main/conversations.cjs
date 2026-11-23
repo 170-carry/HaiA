@@ -22,7 +22,14 @@ class Conversations {
     chats.set(chat,{...chats.get(chat),[key]:value === true});
   }
   flagsOf(message) { return this.flags.get(message.accountId)?.get(message.chat) || {}; }
-  archivedCount(scope) { return this.page(0,scope,false,null,true).count; }
+  archivedCount(scope) {
+    let count = 0;
+    for (const [accountId, chats] of this.flags) {
+      if (scope && scope !== accountId) continue;
+      for (const [chat, flag] of chats) if (flag.archived && this.find(accountId,chat)) count++;
+    }
+    return count;
+  }
   retitle(accountId, chat, title) {
     for (const store of [this.latest,this.directory]) {
       const entry = store.get(accountId)?.get(chat);
@@ -65,7 +72,8 @@ class Conversations {
     const pinned = m => this.flagsOf(m).pinned ? 1 : 0;
     rows.sort((a,b)=>pinned(b)-pinned(a) || b.time-a.time || a.accountId.localeCompare(b.accountId) || a.chat.localeCompare(b.chat));
     return {count: rows.length, messages: rows.slice(0,limit).map(m=>({
-      ...m, pinned:false, muted:false, archived:false, ...this.flagsOf(m), unreadCount: this.unread.get(m.accountId)?.get(m.chat) || 0
+      // The list shows text only, so preview images and other bubble detail are left out of it.
+      ...m, media:m.media ? {kind:m.media.kind} : null, link:null, quote:null, poll:null, reactions:[], pinned:false, muted:false, archived:false, ...this.flagsOf(m), unreadCount: this.unread.get(m.accountId)?.get(m.chat) || 0
     }))};
   }
 }

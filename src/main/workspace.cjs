@@ -1,4 +1,4 @@
-const { Notification, shell, systemPreferences } = require('electron');
+const { Notification, shell, systemPreferences, app, powerMonitor } = require('electron');
 const { Inbox } = require('./inbox.cjs');
 const { WebAccount } = require('./web-account.cjs');
 const media = require('./media.cjs');
@@ -6,7 +6,8 @@ const media = require('./media.cjs');
 const {phoneSearchDigits, contactPhoneDigits, matchesContactQuery} = require('../shared/phone-number.js');
 
 class Workspace {
-  constructor(win, accounts) {
+  constructor(win, accounts, preferences) {
+    this.preferences = preferences;
     this.win = win;
     this.accounts = accounts;
     this.sessions = new Map();
@@ -22,13 +23,29 @@ class Workspace {
     this.thread = null;
     this.epoch = 0;
     for (const account of accounts.items) this.attach(account);
+    // After sleep the pages are usually stale; accounts that are not online are loaded again at once.
+    powerMonitor.on('resume', () => { for (const s of this.sessions.values()) if (!['online','pair'].includes(s.status)) s.load(); });
+    // Coming back to the window reads whatever arrived in the open conversation meanwhile.
+    win.on('focus', () => { if (this.thread && this.inbox.conversations.unread.get(this.active)?.get(this.thread.chat)) this.readSoon(); });
 
   }
   attach(account) {
     const session = new WebAccount(account, (s, batch) => this.receive(s, batch));
     this.sessions.set(account.id, session);
   }
-  snapshot() {
+  // The page shown in the reader. Updates pushed to the window carry each preview image once per opened thread.
+  threadPage(feed, deliver) {
+    if (!this.thread) return feed;
+    const page = this.inbox.page(this.limit, this.active, this.thread.chat);
+    if (this.searchAnchor?.epoch === this.epoch && !page.messages.some(m=>m.id===this.searchAnchor.id)) {
+      page.messages.push(this.searchAnchor);
+      page.messages.sort((a,b)=>b.time-a.time);
+    }
+    if (!deliver) return page;
+    if (this.deliveredFor !== this.epoch) { this.deliveredFor = this.epoch; this.delivered = new Set(); }
+    return {...page, messages:this.inbox.deliver(page.messages,this.delivered)};
+  }
+  snapshot(deliver = false) {
     const query = this.feedQuery;
     const digits = phoneSearchDigits(query);
     const owners = new Map(this.accounts.items.map(a => [a.id,a.name]));
@@ -39,14 +56,73 @@ class Workspace {
       const s = this.sessions.get(a.id);
       const phone = s?.status === 'online' && /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(s.identity || '');
       return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError };
-    }), ...(this.thread ? this.inbox.page(this.limit, this.active, this.thread.chat) : feed), more: this.thread ? this.thread.more : this.sources().some(s => s.more) };
+    }), ...this.threadPage(feed, deliver), more: this.thread ? this.thread.more : this.sources().some(s => s.more) };
   }
   publish() {
     if (this.queued || this.win.isDestroyed()) return;
     this.queued = setTimeout(() => {
       this.queued = null;
-      if (!this.win.isDestroyed()) this.win.webContents.send('desk:update', this.snapshot());
-    }, 75);
+      if (this.win.isDestroyed()) return;
+      const state = this.snapshot(true), stamp = JSON.stringify(state);
+      // Many events change nothing that is shown, for example a repeated presence ping.
+      if (stamp === this.lastSent) return;
+      this.lastSent = stamp;
+      this.badge();
+      this.win.webContents.send('desk:update', state);
+    }, 100);
+  }
+  // Total unread on the dock or taskbar icon.
+  badge() {
+    const total = this.preferences.all.badge ? [...this.sessions.values()].reduce((sum,s) => sum + (this.preferences.all.mutedAccounts.includes(s.account.id) ? 0 : s.unread || 0),0) : 0;
+    if (total !== this.badged) { this.badged = total; app.setBadgeCount(total); }
+  }
+  savePreferences(patch) {
+    const saved = this.preferences.save(patch);
+    this.badged = null; this.badge();
+    return saved;
+  }
+  reorder(ids) {
+    if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('无效的账号顺序');
+    this.accounts.reorder(ids);
+    this.publish();
+  }
+  // Searches the messages this app has synced so far. WhatsApp's full history stays on the phone.
+  searchMessages(scope, term, starred = false, chat = null) {
+    const query = String(term ?? '').trim().toLocaleLowerCase();
+    if (!starred && query.length < 2) return [];
+    const rows = [];
+    for (const [accountId, bucket] of this.inbox.byAccount) {
+      if (scope && scope !== accountId) continue;
+      for (const m of bucket.values()) {
+        if ((chat && m.chat !== chat) || m.system || m.pendingText || m.type === 'revoked' || (starred ? !m.starred : !m.text.toLocaleLowerCase().includes(query))) continue;
+        if (starred && query && !m.text.toLocaleLowerCase().includes(query)) continue;
+        rows.push(m);
+      }
+    }
+    rows.sort((a,b) => b.time - a.time);
+    return rows.slice(0,80).map(m => {
+      const at = query ? Math.max(0,m.text.toLocaleLowerCase().indexOf(query) - 24) : 0;
+      return {accountId:m.accountId, chat:m.chat, id:m.id, title:this.inbox.conversations.find(m.accountId,m.chat)?.title || m.title, sender:m.outgoing ? '我' : m.sender,
+        text:(at ? '…' : '') + m.text.slice(at,at + 140), time:m.time, starred:m.starred === true, media:m.media?.kind || ''};
+    });
+  }
+  messageInfo(accountId, chat, id) {
+    const {session,message} = this.current(accountId,chat,id);
+    return session.call('messageInfo', message.id, message.outgoing);
+  }
+  async setEphemeral(accountId, chat, seconds) {
+    this.current(accountId,chat);
+    const session = this.online(accountId);
+    if (!/@(g\.us|c\.us|lid|s\.whatsapp\.net)$/.test(chat) || ![0,86400,604800,7776000].includes(seconds)) throw new Error('请选择有效的会话和消息保留时长');
+    await session.call('setEphemeral', chat, seconds);
+  }
+  // People to pick from when creating a group: a search when there is a term, recent private chats otherwise.
+  async contacts(accountId, term) {
+    const session = this.online(accountId), query = String(term ?? '').trim();
+    if (!query) return this.inbox.conversations.page(60,accountId).messages.filter(m => !m.chat.endsWith('@g.us')).map(m => ({chat:m.chat,title:m.title,phone:m.phone || ''}));
+    if (query.length > 100) return [];
+    const rows = await session.call('searchPeople', query);
+    return (Array.isArray(rows) ? rows : []).slice(0,60).map(row => ({chat:String(row.chat),title:String(row.title || ''),phone:String(row.phone || '')}));
   }
   receive(s, batch) {
     if (s.disposed) return;
@@ -84,7 +160,11 @@ class Workspace {
     }
     const added = this.inbox.add(id, batch.messages);
     for (const { message, notify } of added) {
-      if (notify && Notification.isSupported()) this.notify(message, s.account.name);
+      // A message that lands in the conversation being read is marked read instead of raising a notification.
+      const reading = this.watching(id, message.chat);
+      if (reading && !message.outgoing && !message.system) this.readSoon();
+      const allowed = this.preferences.all.notify && !this.preferences.all.mutedAccounts.includes(id);
+      if (notify && !reading && allowed && Notification.isSupported()) this.notify(message, s.account.name);
     }
     let receiptChanged = false;
     for (const [key, ack] of batch.acknowledgements || []) if (this.inbox.receipt(id,key,ack)) receiptChanged = true;
@@ -99,6 +179,17 @@ class Workspace {
       if (id === this.active && entry[0] === this.thread?.chat) receiptChanged = true;
     }
     if (receiptLate || receiptChanged || changed || added.length || batch.directory?.length) this.publish();
+  }
+  watching(accountId, chat) {
+    return accountId === this.active && chat === this.thread?.chat && !this.win.isDestroyed() && this.win.isFocused() && !this.win.isMinimized();
+  }
+  // Tells WhatsApp that the open conversation was read, shortly after new messages stop arriving.
+  readSoon() {
+    clearTimeout(this.reading);
+    this.reading = setTimeout(() => {
+      const session = this.sessions.get(this.active), chat = this.thread?.chat;
+      if (session?.status === 'online' && chat && this.watching(this.active,chat)) void session.call('markRead', chat).catch(() => {});
+    }, 500);
   }
   // A number that was linked and now asks to pair again was logged out from outside this app.
   trackLink(s, batch) {
@@ -123,7 +214,7 @@ class Workspace {
     return true;
   }
   notify(message, name) {
-    const n = new Notification({ title: name + ' · ' + message.title, body: message.text });
+    const n = new Notification({ title: name + ' · ' + message.title, body: message.text, silent: !this.preferences.all.sound });
     this.notices.set(n, message.accountId);
     n.on('click', () => {
       this.notices.delete(n);
@@ -196,7 +287,7 @@ class Workspace {
     const epoch = this.epoch;
     await this.readThread();
     if (this.epoch !== epoch) return;
-    await this.sessions.get(accountId).call('markRead', msg.chat);
+    void this.sessions.get(accountId).call('markRead', msg.chat).catch(() => {});
     void this.sessions.get(accountId).call('watch', msg.chat).catch(() => {});
   }
   async readThread() {
@@ -224,6 +315,15 @@ class Workspace {
     if (!message || message.chat !== chat || message.system) throw new Error('消息不存在');
     return {session,message};
   }
+  // Sending is allowed to any known conversation, so a batch of files keeps going when another chat is opened meanwhile.
+  target(accountId, chat, quote) {
+    const session = this.online(accountId);
+    if (typeof chat !== 'string' || !(this.inbox.conversations.find(accountId,chat) || this.people.get(accountId)?.get(chat))) throw new Error('会话不存在，请重新打开对话');
+    if (!quote) return {session,quoted:null};
+    const message = this.inbox.find(accountId,quote);
+    if (!message || message.chat !== chat || message.system) throw new Error('被引用的消息不存在');
+    return {session,quoted:message.id};
+  }
   async deliver(session, accountId, work) {
     const identity = session.identity;
     const message = await work();
@@ -232,20 +332,28 @@ class Workspace {
       this.publish();
     }
   }
-  async send(accountId, chat, text, quote = null) {
+  async send(accountId, chat, text, quote = null, mentions = []) {
     if (typeof text !== 'string' || !text.trim() || text.length > 65536) throw new Error('请确认账号、对话和消息内容');
-    const {session} = this.current(accountId,chat);
-    const quoted = quote ? this.current(accountId,chat,quote).message.id : null;
-    await this.deliver(session,accountId,() => session.call('send', chat, text, quoted));
+    const {session,quoted} = this.target(accountId,chat,quote);
+    await this.deliver(session,accountId,() => session.call('send', chat, text, quoted, mentions));
   }
+  // Small in-memory content: pasted pictures and voice recordings.
   async sendFile(accountId, chat, file) {
-    const {session} = this.current(accountId,chat);
+    const {session,quoted} = this.target(accountId,chat,file?.quote);
     if (!file || typeof file.data !== 'string' || !/^data:[\w.+-]+\/[\w.+-]+(;[\w=.+-]+)*;base64,/.test(file.data.slice(0,200)) ||
-        file.data.length > 70000000) throw new Error('无法发送此文件，单个文件不能超过 50 MB');
-    const item = {voice:file.voice === true, data:file.data, name:String(file.name || '文件').replace(/[\\/\x00-\x1f]/g,'_').slice(0,200),
-      caption:typeof file.caption === 'string' ? file.caption.slice(0,65536) : '',
-      quote:file.quote ? this.current(accountId,chat,file.quote).message.id : null};
+        file.data.length > 28000000) throw new Error('无法发送此内容，粘贴的图片和录音不能超过 20 MB');
+    const item = {voice:file.voice === true, mentions:file.mentions, data:file.data, name:String(file.name || '文件').replace(/[\\/\x00-\x1f]/g,'_').slice(0,200),
+      caption:typeof file.caption === 'string' ? file.caption.slice(0,65536) : '', quote:quoted};
     await this.deliver(session,accountId,() => session.call('sendFile', chat, item));
+  }
+  // A file chosen from disk is read here and streamed to WhatsApp in pieces.
+  async sendPath(accountId, chat, filePath, meta) {
+    const {session,quoted} = this.target(accountId,chat,meta?.quote);
+    if (typeof filePath !== 'string' || !filePath) throw new Error('无法读取这个文件');
+    const caption = typeof meta?.caption === 'string' ? meta.caption.slice(0,65536) : '';
+    const report = (name, sent, total) => { if (!this.win.isDestroyed()) this.win.webContents.send('desk:progress',{accountId,chat,name,sent,total}); };
+    try { await this.deliver(session,accountId,() => media.upload(session,chat,filePath,{caption,quote:quoted,mentions:meta?.mentions},report)); }
+    finally { report('',0,0); }
   }
   media(accountId, chat, id) {
     const {session,message} = this.current(accountId,chat,id);
@@ -265,10 +373,10 @@ class Workspace {
     if (everyone && !message.outgoing) throw new Error('只能撤回自己发送的消息');
     await session.call('remove', chat, message.id, everyone === true);
   }
-  async edit(accountId, chat, id, text) {
+  async edit(accountId, chat, id, text, mentions) {
     const {session,message} = this.current(accountId,chat,id);
     if (!message.outgoing || message.media || typeof text !== 'string' || !text.trim() || text.length > 65536) throw new Error('这条消息无法编辑');
-    await session.call('edit', message.id, text);
+    await session.call('edit', message.id, text, mentions);
   }
   callTitle(accountId, peer) {
     return this.inbox.conversations.find(accountId,peer)?.title || (/^\d+@/.test(peer) ? '+' + peer.split('@')[0] : '未知号码');
@@ -282,9 +390,8 @@ class Workspace {
     return session;
   }
   async microphone(video) {
-    if (process.platform !== 'darwin') return;
-    const allowed = await systemPreferences.askForMediaAccess('microphone') && (!video || await systemPreferences.askForMediaAccess('camera'));
-    if (!allowed) throw new Error('请在系统设置中允许 HaiA 使用麦克风' + (video ? '和摄像头' : ''));
+    const {mediaAccess} = require('./permissions.cjs');
+    if (!await mediaAccess(this.win,'microphone') || (video && !await mediaAccess(this.win,'camera'))) throw new Error('未获得' + (video ? '麦克风或摄像头' : '麦克风') + '权限，通话未开始');
   }
   async callStart(accountId, chat, video) {
     const {session} = this.current(accountId,chat);
@@ -359,23 +466,36 @@ class Workspace {
     if (!this.sessions.has(accountId)) throw new Error('账号不存在');
     return this.inbox.conversations.page(1000,accountId).messages.map(m => ({chat:m.chat,title:m.title}));
   }
-  async forward(accountId, chat, id, to) {
-    const {session,message} = this.current(accountId,chat,id);
-    if (typeof to !== 'string' || !(this.inbox.conversations.find(accountId,to) || this.people.get(accountId)?.get(to))) throw new Error('请选择要转发到的会话');
-    await session.call('forward', to, message.id);
-  }
-  async createGroup(accountId, name, phones) {
-    const session = this.sessions.get(accountId);
-    if (!session || session.status !== 'online') throw new Error('请选择已连接的账号');
+  // Members are WhatsApp ids picked from contacts, or phone numbers typed in.
+  async createGroup(accountId, name, members) {
+    const session = this.online(accountId);
     if (typeof name !== 'string' || !name.trim() || name.length > 100) throw new Error('请填写 100 字以内的群名称');
-    const members = Array.isArray(phones) ? [...new Set(phones.map(p => String(p).replace(/[\s()+-]/g,'')))] : [];
-    if (!members.length || members.length > 50 || members.some(p => !/^[1-9]\d{6,14}$/.test(p))) throw new Error('请填写 1 到 50 个含国家区号的手机号');
+    const ids = [...new Set((Array.isArray(members) ? members : []).map(member => {
+      const value = String(member).trim();
+      if (/^[\w.:-]{3,60}@(c\.us|lid)$/.test(value)) return value;
+      const digits = value.replace(/[\s()+-]/g,'');
+      return /^[1-9]\d{6,14}$/.test(digits) ? digits + '@c.us' : null;
+    }))];
+    if (!ids.length || ids.length > 50 || ids.includes(null)) throw new Error('请选择 1 到 50 位成员，手机号需包含国家区号');
     const identity = session.identity;
-    const group = await session.call('createGroup', name.trim(), members.map(p => p + '@c.us'));
+    const group = await session.call('createGroup', name.trim(), ids);
     if (session.disposed || session.identity !== identity || typeof group?.chat !== 'string' || !group.chat.endsWith('@g.us')) throw new Error('群聊创建失败');
     this.inbox.conversations.index(accountId,[{chat:group.chat,title:name.trim(),time:Date.now()}]);
     await this.openChat(accountId,group.chat).catch(() => {});
     return {failed:Array.isArray(group.failed) ? group.failed.slice(0,50).map(String) : []};
+  }
+  // Answer the open contact from another linked number. A private chat that the other number has not had yet starts empty.
+  async replyAs(accountId, chat) {
+    this.online(accountId);
+    const from = this.thread;
+    if (!from || from.chat !== chat) throw new Error('请重新打开对话');
+    if (accountId === this.active) return;
+    if (!this.inbox.conversations.find(accountId,chat)) {
+      if (chat.endsWith('@g.us')) throw new Error('这个账号不在该群聊中，无法用它回复');
+      if (!this.people.has(accountId)) this.people.set(accountId,new Map());
+      this.people.get(accountId).set(chat,{chat,title:from.title,existing:false});
+    }
+    await this.openChat(accountId,chat);
   }
   contactInfo(accountId, chat) {
     return this.current(accountId,chat).session.call('contactInfo', chat);
@@ -454,6 +574,7 @@ class Workspace {
   }
   close() {
     clearTimeout(this.queued);
+    clearTimeout(this.reading);
     for (const session of this.sessions.values()) {
       this.clearNotices(session.account.id);
       session.close();

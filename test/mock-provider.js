@@ -10,11 +10,20 @@ window.sample = (body, id, fromMe = false, contact = chat, minutesAgo = 0, extra
   const msg = {body, id:{_serialized:id,remote:contact.id,fromMe}, type:'chat',t:now-minutesAgo*60+rows.length,...extra};
   rows.push(msg); events.get('chat.new_message')?.(msg); return msg;
 };
-window.require = name => name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;}} : null;
+const timerModules = {
+  JSResourceForInteraction:()=>({load:async()=>true}),
+  WAWebChangeEphemeralDurationChatAction:{changeEphemeralDuration:async(chat,seconds,entry,trigger)=>{
+    if (entry!==1 || trigger!=='chat_settings') throw Error('bad timer arguments');
+    chat.ephemeralDuration=seconds;
+  }},
+  WAWebEphemeralityTypes:{DisappearingModeTrigger:{ChatSettings:'chat_settings'}},
+  WAWebWamEnumEphemeralSettingEntryPointType:{EPHEMERAL_SETTING_ENTRY_POINT_TYPE:{CHAT_INFO:1}}
+};
+window.require = name => timerModules[name] || (name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;}} : null);
 window.tags = [{id:'1',name:'新客户',hexColor:'#407776'}];
 window.statuses = [{id:'vivian@c.us',contact:{name:'采购 · Vivian'},totalCount:1,unreadCount:1,t:now,msgs:{getModelsArray:()=>[{id:{_serialized:'false_status@broadcast_S1_vivian@c.us'},t:now,type:'chat',body:'本周新品到货',backgroundColor:0xff145347}]}}];
 window.WPP = {
-  whatsapp:{StatusV3Store:{getModelsArray:()=>window.statuses},MsgStore:{getMessagesById:async ids=>({messages:(window.restoredRows || []).filter(m=>ids.includes(m.id._serialized))}),on:(name,fn)=>events.set('model:'+name,fn)}},
+  whatsapp:{msgFindSearch:async({searchTerm,count})=>({messages:rows.filter(m=>m.body?.includes(searchTerm)).slice(-count),eof:true}),StatusV3Store:{getModelsArray:()=>window.statuses},MsgStore:{getMessagesById:async ids=>({messages:(window.restoredRows || []).filter(m=>ids.includes(m.id._serialized))}),on:(name,fn)=>events.set('model:'+name,fn)}},
   on: (name, cb) => events.set(name,cb),
   loader: {isReady:true,onReady:cb=>cb()},
   conn: {
@@ -26,6 +35,7 @@ window.WPP = {
     cancelLinkDeviceCode(){},isAuthenticated:()=>!!localStorage.owner,isMainReady:()=>!!localStorage.owner,getMyUserId:()=>localStorage.owner},
   group:{create:async(name,members)=>{const id='new-group@g.us';chats.set(id,{id,formattedTitle:name,t:now,groupMetadata:{subject:name}});
       return {gid:{_serialized:id},participants:Object.fromEntries(members.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]))};},ensureGroup:async id=>chats.get(id), getParticipants:async()=>[{id:'16505550102@c.us',isAdmin:true},{id:localStorage.owner,isAdmin:true},...(window.added || []).map(id=>({id}))],
+    setProperty:async(id,_name,value)=>{chats.get(id).groupMetadata.ephemeralDuration=value;return true;},
     addParticipants:async(_g,ids)=>{window.added=ids.slice(0,1);return Object.fromEntries(ids.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]));},removeParticipants:async(_g,ids)=>{window.added=(window.added || []).filter(id=>!ids.includes(id));},promoteParticipants:async()=>{},demoteParticipants:async()=>{},
     setSubject:async(id,name)=>{chats.get(id).groupMetadata.subject=name;return true;},setDescription:async()=>false},
   contact: {getProfilePictureUrl: async id => {
@@ -43,6 +53,7 @@ window.WPP = {
     getStatus:async()=>'工作日 9:00–18:00 在线',getCommonGroups:async()=>['fixture@g.us'],
     getBusinessProfile:async()=>({description:'精密五金配件采购',categories:[{localized_display_name:'批发'}],email:'buyer@example.test',website:['https://example.test']}),
     save:async(id,name)=>{const c=chats.get(id);c.saved=name;c.formattedTitle=name;},remove:async id=>{const c=chats.get(id);delete c.saved;c.formattedTitle='+65 8123 4567';}},
+  profile:{isBusiness:()=>localStorage.owner==='one'},
   labels:{getAllLabels:async()=>window.tags,addNewLabel:async name=>{const tag={id:String(window.tags.length+1),name,hexColor:'#4e729a'};window.tags.push(tag);return tag;},
     addOrRemoveLabels:async(id,o)=>{const c=chats.get(id);c.labels=(c.labels || []).filter(l=>l!==o.labelId);if(o.type==='add')c.labels.push(o.labelId);}},
   status:{get:id=>window.statuses.find(s=>s.id===id),sendTextStatus:async text=>{window.posted=text;}},
@@ -55,18 +66,23 @@ window.WPP = {
       const c=chats.get(id); c.unreadCount=0;events.get('chat.unread_count_changed')?.({chat:c,unreadCount:0});return true;
     }, get:id=>chats.get(id), list:async()=>[...chats.values()],getMessages:async id=>rows.filter(r=>r.id.remote===id),
     sendTextMessage:async(chatId,text,options)=>{
+      window.sentMention={text,ids:options.mentionedList};
       const origin=options?.quotedMsg && rows.find(r=>r.id._serialized===options.quotedMsg);
       const extra=origin ? {quotedMsg:origin,quotedStanzaID:origin.id._serialized.split('_')[2],quotedParticipant:'16505550102@c.us'} : {};
       return {id:window.sample(text,'true_'+chatId+'_SENT'+rows.length,true,chats.get(chatId),0,extra).id._serialized};
     },
     sendFileMessage:async(chatId,data,options)=>{
-      const mimetype=/^data:([^;]+)/.exec(data)[1], id='true_'+chatId+'_FILE'+rows.length;
-      blobs.set(id,data);
+      // Test hook: record how many bytes arrived, whether as a data URL or as a Blob.
+      window.lastFileBytes=typeof data==='string' ? Math.floor((data.length-data.indexOf(',')-1)*3/4) : data.size;
+      const mimetype=typeof data==='string' ? /^data:([^;]+)/.exec(data)[1] : data.type || options.mimetype || 'application/octet-stream', id='true_'+chatId+'_FILE'+rows.length;
+      blobs.set(id,typeof data==='string' && data.length<200000 ? data : 'big:'+window.lastFileBytes);
+      if (window.lastFileBytes < 1024) window.lastUpload={name:options.filename,caption:options.caption,chat:chatId,
+        base64:typeof data==='string' ? data.split(',')[1] : btoa(String.fromCharCode(...new Uint8Array(await data.arrayBuffer())))};
       const type=mimetype.startsWith('image/') ? 'image' : mimetype.startsWith('audio/') ? 'audio' : 'document';
       window.sample('',id,true,chats.get(chatId),0,{type,mimetype,filename:options.filename,caption:options.caption,size:data.length});
       return {id};
     },
-    downloadMedia:async id=>(await fetch(blobs.get(id))).blob(),
+    downloadMedia:async id=>String(blobs.get(id)).startsWith('big:') ? new Blob([new Uint8Array(Number(blobs.get(id).slice(4)))],{type:'video/mp4'}) : (await fetch(blobs.get(id))).blob(),
     sendReactionToMessage:async(id,emoji)=>{ if(emoji) reacted.set(id,emoji); else reacted.delete(id); },
     getReactions:async id=>({reactions:reacted.has(id) ? [{aggregateEmoji:reacted.get(id),hasReactionByMe:true,senders:[{}]}] : []}),
     deleteMessage:async(_chat,id,_media,revoke)=>({id,isRevoked:!!revoke,isDeleted:!revoke}),
@@ -74,6 +90,7 @@ window.WPP = {
     sendLocationMessage:async(chatId,o)=>({id:window.sample('',  'true_'+chatId+'_LOC'+rows.length,true,chats.get(chatId),0,{type:'location',lat:Number(o.lat),lng:Number(o.lng),loc:o.name}).id._serialized}),
     sendVCardContactMessage:async(chatId,c)=>({id:window.sample('BEGIN:VCARD\nFN:'+c.name+'\nTEL;waid='+c.id.split('@')[0]+':+'+c.id.split('@')[0]+'\nEND:VCARD','true_'+chatId+'_VC'+rows.length,true,chats.get(chatId),0,{type:'vcard',vcardFormattedName:c.name}).id._serialized}),
     sendCreatePollMessage:async(chatId,name,options)=>({id:window.sample('','true_'+chatId+'_POLL'+rows.length,true,chats.get(chatId),0,{type:'poll_creation',pollName:name,pollOptions:options.map(o=>({name:o}))}).id._serialized}),
+    getMessageACK:async()=>({deliveryRemaining:1,participants:[{wid:'16505550102@c.us',readAt:now,deliveredAt:now-5}]}),
     getVotes:async()=>({votes:[{selectedOptions:[1]},{selectedOptions:[1]},{selectedOptions:[0]}]}),
     starMessage:async(id,star)=>({id,star}), markIsUnread:async id=>{const c=chats.get(id);c.unreadCount=-1;events.get('chat.unread_count_changed')?.({chat:c,unreadCount:-1});},
     forwardMessage:async(to,id)=>{ window.forwarded=[to,id]; return true; },
