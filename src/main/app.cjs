@@ -73,7 +73,11 @@ else app.whenReady().then(async () => {
     ...require('./group-routes.cjs').groupRoutes(desk),
     ...translationRoutes(app.getPath('userData'),require('electron').safeStorage,require('electron').net.fetch.bind(require('electron').net)),
     state: () => desk.snapshot(),
-    checkUpdate: () => require('./release-check.cjs').checkRelease(require('../../package.json').version, require('electron').net.fetch.bind(require('electron').net)),
+    ...require('./updates/service.cjs').updateRoutes({
+      app, fetch:require('electron').net.fetch.bind(require('electron').net),
+      notify:state=>{ if(!win.isDestroyed()) win.webContents.send('desk:update-progress',state); },
+      quit:()=>{ quitting=true; desk.close(); app.quit(); }
+    }),
     preferences: () => ({...preferences.all, version:require('../../package.json').version}), savePreferences: patch => desk.savePreferences(patch),
     searchHistory: (scope, term, chat) => require('./history-search.cjs').searchHistory(desk,scope,term,chat),
     openHistoryHit: (account, chat, id) => require('./history-search.cjs').openHit(desk,account,chat,id),

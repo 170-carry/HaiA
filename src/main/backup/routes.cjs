@@ -1,10 +1,10 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const {randomUUID} = require('node:crypto');
+const {exportSelection,readSelection,restoreSelection}=require('./collection.cjs');
 const {dialog} = require('electron');
 const media = require('../media.cjs');
-const {uuid,password,pack,unpack,readJson} = require('./package.cjs');
-const {capture,validate,assetFile,chatId} = require('./records.cjs');
+const {uuid,password,unpack,readJson} = require('./package.cjs');
+const {capture,assetFile,chatId} = require('./records.cjs');
 
 const {historyPage,chatPages}=require('./chat-pages.cjs');
 
@@ -54,15 +54,15 @@ function backupRoutes(desk,dir) {
         await fs.rm(path.join(root,id),{recursive:true,force:true});
       } finally { busy=false; }
     },
-    backupExport:(id,pass,drafts=[])=>operation(async(_,staging)=>{
+    backupExport:(ids,pass,drafts={})=>operation(async(temp,staging)=>{
       password(pass);
-      const session=desk.sessions.get(id);
-      if(!session) throw new Error('请选择要导出的账号');
-      const choice=await dialog.showSaveDialog(win,{filters,defaultPath:'HaiA-'+session.account.name.replace(/[\\/:*?"<>|]/g,'_')+'.haia'});
+      if(!Array.isArray(ids) || !ids.length || new Set(ids).size!==ids.length ||
+         !ids.every(id=>uuid.test(id) && desk.sessions.has(id))) throw Error('请勾选要导出的账号');
+      const label=ids.length===1?account(ids[0]).name:ids.length+'个账号';
+      const choice=await dialog.showSaveDialog(win,{filters,defaultPath:'HaiA-'+label.replace(/[\\/:*?"<>|]/g,'_')+'.haia'});
       if(choice.canceled) return null;
-      const m=await capture(desk,session,staging,drafts,progress,media.download,(await versions(id))[0]);
-      progress('正在加密备份…'); await pack(staging,choice.filePath,pass);
-      return {chats:m.chats.length,messages:m.chats.reduce((n,c)=>n+c.count,0),missing:m.missingAttachments,pending:m.missingBodies,online:m.online};
+      return exportSelection(ids,{temp,staging,target:choice.filePath,pass,progress,capture:async(id,dir,notify)=>
+        capture(desk,desk.sessions.get(id),dir,drafts[id] || [],notify,media.download,(await versions(id))[0])});
     }),
     backupImport:pass=>operation(async(temp,staging)=>{
       password(pass);
@@ -70,22 +70,7 @@ function backupRoutes(desk,dir) {
       if(choice.canceled) return null;
       progress('正在校验并恢复备份…');
       await unpack(choice.filePaths[0],staging,path.join(temp,'payload.tar'),pass);
-      const m=await validate(staging);
-      let owner=desk.accounts.items.find(a=> (a.id===m.source || a.archiveSource===m.source) && (!a.phone || a.phone===m.phone));
-      if(!owner && m.phone) owner=desk.accounts.items.find(a=>a.phone===m.phone);
-      const fresh=!owner;
-      if(fresh) owner={id:randomUUID(),name:m.name,phone:m.phone,archiveSource:m.source};
-      const parent=path.join(root,owner.id), dest=path.join(parent,m.id);
-      await fs.mkdir(parent,{recursive:true,mode:0o700});
-      const same=await fs.stat(dest).catch(e=>{if(e.code==='ENOENT')return null;throw e});
-      if(!same) await fs.rename(staging,dest);
-      if(fresh) {
-        try { desk.accounts.save([...desk.accounts.items,owner]); }
-        catch(e){await fs.rm(dest,{recursive:true,force:true});throw e;}
-        desk.attach(owner);
-      }
-      desk.select(owner.id); desk.publish();
-      return {account:owner.id,key:m.id,name:owner.name,drafts:m.drafts,already:!!same};
+      return restoreSelection(desk,root,await readSelection(temp,staging));
     }),
     backupList:async id=>(await versions(id)).map(({meta:m})=>({key:m.id,time:m.time,name:m.name,phone:m.phone,chats:m.chats,missing:m.missingAttachments,pending:m.missingBodies})),
     backupPage:async(id,key,chat,offset=0)=>{

@@ -1,7 +1,7 @@
 {
   "name": "haia",
   "productName": "HaiA",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "description": "A local multi-account WhatsApp desktop inbox",
   "author": "HaiA",
   "private": true,
@@ -15,7 +15,8 @@
     "start": "electron .",
     "test": "node --test test/*.test.cjs",
     "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never",
-    "dist:win": "electron-builder --win nsis --x64 --publish never"
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "update:manifest": "node scripts/sign-update.cjs"
   },
   "devDependencies": {
     "@wppconnect/wa-js": "4.8.2",

@@ -81,3 +81,25 @@ test('an offline account can export its name and drafts even before it has any m
   assert.deepEqual(exported.chats,[]);
   assert.deepEqual((await validate(dir)).drafts,drafts);
 });
+
+test('batch restore reserves exact account matches and rolls back newly installed records on failure',async t=>{
+  const {restoreSelection}=require('../src/main/backup/collection.cjs');
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'haia-batch-restore-'));
+  t.after(()=>fs.rm(dir,{recursive:true,force:true}));
+  const root=path.join(dir,'backups'), owner={id:randomUUID(),name:'Existing',phone:'123456'};
+  const bundles=[];
+  for(const source of [randomUUID(),owner.id]){
+    const folder=await fs.mkdtemp(path.join(dir,'snapshot-'));
+    bundles.push({dir:folder,meta:{source,id:randomUUID(),name:'Imported',phone:owner.phone,drafts:[]}});
+  }
+  const desk={accounts:{items:[owner],save:()=>{throw Error('no space');}},attach:()=>{},select:()=>{},publish:()=>{}};
+  await assert.rejects(restoreSelection(desk,root,bundles),/no space/);
+  assert.equal(desk.accounts.items.length,1);
+  for(const id of await fs.readdir(root)) assert.deepEqual(await fs.readdir(path.join(root,id)),[]);
+  for(const bundle of bundles) await fs.mkdir(bundle.dir);
+  desk.accounts.save=items=>{desk.accounts.items=items};
+  const result=await restoreSelection(desk,root,bundles);
+  assert.equal(desk.accounts.items.length,2);
+  assert.notEqual(result[0].account,owner.id);
+  assert.equal(result[1].account,owner.id);
+});

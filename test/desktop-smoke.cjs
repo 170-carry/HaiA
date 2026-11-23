@@ -24,6 +24,10 @@ translation.translationRoutes = directory=>createRoutes(directory,{
   const source = JSON.parse(req.body)[0].Text;
   return Response.json([{translations:[{text:source === 'Ready for review' ? '可以开始审核了。' : '测试译文 '+source}]}]);
 });
+const updater=require('../src/main/updates/service.cjs');
+const updateRoutes=updater.updateRoutes, updateFixture=require('./update-fixture.cjs').fixture();
+updater.updateRoutes=options=>updateRoutes({...options,publicKey:updateFixture.publicKey,fetch:updateFixture.fetch,
+  app:{getPath:name=>app.getPath(name),getVersion:()=>require('../package.json').version,isPackaged:false}});
 require('../src/main/app.cjs');
 const pause = ms => new Promise(r => setTimeout(r,ms));
 async function until(fn) {
@@ -634,12 +638,10 @@ async function until(fn) {
     await call('reorder',[me,accounts[1].id]);
     await ui("get('open-settings').click()");
     await until(()=>ui("get('settings-dialog').open && get('template-list').textContent.includes('发货说明') && document.querySelector('[data-pref=notify]').checked && get('settings-version').textContent.startsWith('HaiA ')"));
-    const releases = require('../src/main/release-check.cjs'), checkRelease = releases.checkRelease;
-    try {
-      releases.checkRelease = current => checkRelease(current,async () => Response.json({tag_name:'v0.10.0'}));
-      await ui("get('check-update').click()");
-      await until(()=>ui("get('update-status').textContent.includes('0.10.0') && !get('update-download').hidden"));
-    } finally { releases.checkRelease = checkRelease; }
+    await ui("get('check-update').click()");
+    await until(()=>ui("get('update-status').textContent.includes('0.10.0') && !get('update-download').hidden"));
+    await ui("get('update-download').click()");
+    await until(()=>ui("get('update-download').textContent==='重启并更新' && get('update-status').textContent.includes('通过校验')"));
     await ui("const box=document.querySelector('[data-pref=sound]');box.checked=false;box.dispatchEvent(new Event('change',{bubbles:true}))");
     await until(async()=>(await call('preferences')).sound===false);
     await call('savePreferences',{sound:true,templates:[]});

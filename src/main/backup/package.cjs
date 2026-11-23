@@ -11,7 +11,7 @@ const tar = require('tar');
 const MAGIC = Buffer.from('HaiA-backup-v1\n');
 const HEADER = MAGIC.length + 16 + 12;
 const TAG = 16;
-const namePattern = /^(?:manifest\.json|chat-[a-f0-9]{64}\.json|file-[a-f0-9]{64})$/;
+const namePattern = /^(?:[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}\.)?(?:manifest\.json|chat-[a-f0-9]{64}\.json|file-[a-f0-9]{64})$/;
 const uuid = /^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i;
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 function password(value) {

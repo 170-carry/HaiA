@@ -2,7 +2,8 @@
 process.env.HAIA_TEST='1';
 const {app, BrowserWindow, dialog, session, webContents}=require('electron');
 const fs=require('node:fs'), path=require('node:path'), assert=require('node:assert/strict');
-const [dir, phase]=process.argv.slice(2);
+const [dir, phase,mode]=process.argv.slice(2);
+const multi=mode==='multi';
 if(!dir || !['export','import','restart'].includes(phase)) throw new Error('需要测试目录和阶段');
 const profile=path.join(dir,phase==='export'?'source':'destination'), file=path.join(dir,'fixture.haia');
 fs.mkdirSync(profile,{recursive:true});
@@ -33,19 +34,37 @@ async function until(fn) {
     await until(()=>w.executeJavaScript("typeof window.sample==='function' && typeof window.relayReader==='object'").catch(()=>false));
     await w.executeJavaScript("localStorage.owner='123456@c.us';sample('fixture message','one');true");
     await until(()=>ui("state.accounts[0].status==='online'"));
+    if(multi) {
+      await ui("api.add('第二个账号')");
+      const second=await until(()=>ui('state.accounts[1]?.id'));
+      const w2=await until(()=>webContents.getAllWebContents().find(w=>w.session===session.fromPartition('persist:wa-'+second)));
+      await until(()=>w2.executeJavaScript("typeof window.sample==='function' && typeof window.relayReader==='object'").catch(()=>false));
+      await w2.executeJavaScript("localStorage.owner='789000@c.us';sample('second inbox','one');true");
+      await until(()=>ui("state.accounts[1].status==='online'"));
+      await ui("api.add('未选择的账号')"); await until(()=>ui("state.accounts.length===3"));
+    }
   }
   await click('open-backup');
   assert.equal(await ui("get('open-backup').getBoundingClientRect().bottom <= get('open-settings').getBoundingClientRect().top"),true);
   if(phase==='export') {
+    if(multi){
+      await click('backup-all');
+      await ui("get('backup-choices').querySelectorAll('input')[2].click()");
+      assert.equal(await ui("get('backup-all').indeterminate && get('backup-choices').querySelectorAll(':checked').length===2"),true);
+    }
     await pass(); await click('backup-export');
-    await until(()=>ui("get('backup-status').textContent.includes('1 条消息')"));
+    await until(()=>ui("get('backup-status').textContent.includes('"+(multi?'2':'1')+" 条消息')"));
   }
   if(phase!=='restart') {
     await pass(); await click('backup-import');
     await until(()=>ui("get('backup-log').textContent.includes('fixture message')"));
     await pass(); await click('backup-import');
     await until(()=>ui("get('backup-status').textContent.includes('已导入，可以查看')"));
-    assert.equal(await ui("state.accounts.length"),1);
+    assert.equal(await ui("state.accounts.length"),multi?(phase==='export'?3:2):1);
+    if(multi){
+      await ui("get('backup-account').value=state.accounts[1].id;get('backup-account').dispatchEvent(new Event('change'))");
+      await until(()=>ui("get('backup-log').textContent.includes('second inbox') && !get('backup-log').textContent.includes('fixture message')"));
+    }
     if(phase==='export') assert.equal(await ui("state.accounts[0].status"),'online');
     else await until(()=>ui("state.accounts[0].status==='pair'"));
   } else {
@@ -53,6 +72,7 @@ async function until(fn) {
     assert.equal(await ui("get('backup-version').options.length"),1);
     await click('backup-close');
     await ui("api.remove(state.accounts[0].id)");
+    if(multi) await ui("api.state().then(s=>api.remove(s.accounts[0].id))");
     assert.deepEqual(fs.readdirSync(path.join(profile,'account-backups')),[]);
   }
   console.log('Backup desktop '+phase+' passed');app.exit(0);
