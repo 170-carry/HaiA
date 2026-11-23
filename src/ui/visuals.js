@@ -19,6 +19,7 @@ const paths = {
   download:'M12 4v11 M7 11l5 5 5-5 M5 20h14',copy:'M9 9h11v11H9z M5 15V4h11',edit:'M4 20h4L20 8l-4-4L4 16z M14 6l4 4',
   bell:'M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 21h4',pin:'M9 3h6l-1 6 4 4H6l4-4z M12 13v8',block:'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M5.6 5.6l12.8 12.8',archive:'M3 5h18v4H3z M5 9v11h14V9 M10 13h4',
   mute:'M6 16V11a6 6 0 0 1 9-5 M18 11v5l2 2H8 M10 21h4 M4 4l16 16',
+  check:'M4 5h16v14H4z M8 12l3 3 5-6',
   star:'M12 3l2.7 5.6 6.1.8-4.5 4.3 1.1 6.1L12 16.9 6.6 19.8l1.1-6.1L3.2 9.4l6.1-.8z',poll:'M5 20V10 M12 20V4 M19 20v-7',phone:'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2',video:'M3 6h12v12H3z M15 10l6-3v10l-6-3',status:'M12 3a9 9 0 1 1-8.5 6 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8',
   wave:'M4 10v4 M8 6v12 M12 3v18 M16 7v10 M20 10v4',pulse:'M3 12h4l2-6 4 12 2-6h6',mic:'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z M6 11a6 6 0 0 0 12 0 M12 17v4',forward:'M14 5l6 5-6 5 M20 10h-9c-4 0-7 2-7 7',
   send:'M3 10l18-7-6 18-4-7z M11 14l10-11',reply:'M10 5l-6 5 6 5 M4 10h9c4 0 7 2 7 7'
@@ -47,6 +48,13 @@ function accountTones(accounts) {
     used.add(color);
   }
   return selected;
+}
+// Unread counts stay exact below a thousand; above that they are shortened: 1.2K, 12K, 999K+.
+function countLabel(count) {
+  if (count < 1000) return String(count);
+  if (count >= 999500) return '999K+';
+  const thousands = count / 1000;
+  return (thousands < 10 ? String(Math.floor(thousands * 10) / 10).replace(/\.0$/,'') : String(Math.floor(thousands))) + 'K';
 }
 function el(tag, cls, text) {
   const n = document.createElement(tag); if (cls) n.className = cls;

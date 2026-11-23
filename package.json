@@ -1,7 +1,7 @@
 {
   "name": "haia",
   "productName": "HaiA",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "description": "A local multi-account WhatsApp desktop inbox",
   "author": "HaiA",
   "private": true,

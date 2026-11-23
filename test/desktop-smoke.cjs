@@ -172,7 +172,7 @@ async function until(fn) {
       assert.equal(await shell.executeJavaScript("document.querySelectorAll('.message.found').length"),3);
       await shell.executeJavaScript("mq.value='';mq.dispatchEvent(new Event('input'));document.getElementById('filter-unread').click()");
       assert.equal(await shell.executeJavaScript("Array.from(document.querySelectorAll('#list .row')).every(row=>row.querySelector('.conversation-unread'))"),true);
-      await shell.executeJavaScript("document.getElementById('filter-all').click()");
+      await shell.executeJavaScript("document.getElementById('kind-all').click()");
       await call('open',accounts[0].id,'example-2'); await pause(240);
       await capture('thread');
       const w = BrowserWindow.fromWebContents(shell);
@@ -394,7 +394,7 @@ async function until(fn) {
     await until(()=>ui("!!document.querySelector('.message .starred')"));
     await assert.rejects(()=>call('openExternal','file:///etc/passwd'));
     await ui("get('attach').click()");
-    assert.deepEqual(await ui("get('attach-menu').matches(':popover-open') && [...get('attach-menu').querySelectorAll('button')].map(b=>b.textContent)"),['图片或文件','位置','联系人名片','投票','快捷回复']);
+    assert.deepEqual(await ui("get('attach-menu').matches(':popover-open') && [...get('attach-menu').querySelectorAll('button')].map(b=>b.textContent)"),['图片或文件','位置','联系人名片','投票','快捷回复','语音消息','语音输入（转文字并翻译）']);
     await ui("get('attach-menu').querySelectorAll('button')[3].click()");
     assert.equal(await ui("get('special-dialog').open && get('special-title').textContent"),'发起投票');
     await ui("get('special-cancel').click()");
@@ -441,7 +441,7 @@ async function until(fn) {
     await until(()=>ui("document.querySelectorAll('#list .row').length===1 && !!"+rowOf('demo@c.us')));
     await call('chatSetting',me,'demo@c.us','archived',false);
     await until(()=>ui("get('feed-empty').textContent==='没有已归档的会话' && !get('feed-empty').hidden && get('archived-count').hidden"));
-    await ui("get('filter-all').click()");
+    await ui("get('filter-archived').click()");
     await until(()=>ui("!!"+rowOf('demo@c.us')));
     await call('chatSetting',me,'demo@c.us','pinned',false);
     await call('chatSetting',me,'demo@c.us','unread',true);
@@ -554,7 +554,7 @@ async function until(fn) {
     await call('openChat',me,'demo@c.us');
     await until(()=>ui("state.thread?.chat==='demo@c.us' && !!document.querySelector('.unread-divider') && /未读消息 0|正在看的会话里的新消息/.test(document.querySelector('.unread-divider').nextElementSibling.textContent)"));
     await until(()=>ui("[...document.querySelectorAll('#list .row')].find(r=>JSON.parse(r.dataset.message)[1]==="+JSON.stringify(G)+")?.querySelector('.snippet').textContent==='草稿：草稿内容待发'"));
-    assert.equal(await ui("JSON.parse(localStorage.getItem('drafts')).some(([key,text])=>text==='草稿内容待发')"),true);
+    await until(()=>ui("JSON.parse(localStorage.getItem('drafts') || '[]').some(([key,text])=>text==='草稿内容待发')"));
     await ui("get('scroll').scrollTop=0;get('scroll').dispatchEvent(new Event('scroll'))");
     await a.executeJavaScript("sample('滚动时到达的消息','jump-probe');true");
     await until(()=>ui("!get('jump-bottom').hidden && get('jump-count').textContent==='1'"));
@@ -644,6 +644,81 @@ async function until(fn) {
     await until(async()=>(await call('preferences')).sound===false);
     await call('savePreferences',{sound:true,templates:[]});
     await ui("get('settings-close').click()");
+    await call('select',me);
+    await until(()=>ui("get('title').hidden && [...document.querySelectorAll('.feed-kinds button')].map(b=>b.firstChild.textContent).join()==='全部,单聊,群聊,未读' && get('kind-all').getAttribute('aria-pressed')==='true'"));
+    const kinds=()=>ui("[...document.querySelectorAll('#list .row')].map(r=>JSON.parse(r.dataset.message)[1].endsWith('@g.us'))");
+    await ui("get('kind-group').click()");
+    await until(async()=>{const list=await kinds();return list.length>0 && list.every(Boolean) && (await call('state')).feedKind==='group';});
+    await ui("get('kind-direct').click()");
+    await until(async()=>{const list=await kinds();return list.length>0 && list.every(g=>!g);});
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'feed-kinds.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('filter-unread').click()");
+    await until(()=>ui("get('filter-unread').getAttribute('aria-pressed')==='true' && [...document.querySelectorAll('#list .row')].every(row=>row.querySelector('.conversation-unread'))"));
+    assert.equal(await ui("get('scope-unread').parentElement.id"),'filter-unread');
+    assert.deepEqual(await ui("[0,7,999,1000,1049,1250,9999,10000,36500,999499,1200000].map(countLabel)"),['0','7','999','1K','1K','1.2K','9.9K','10K','36K','999K','999K+']);
+    await ui("get('kind-all').click()");
+    await until(async()=>(await call('state')).feedKind==='all' && await ui("get('kind-all').getAttribute('aria-pressed')==='true'"));
+    // Layout and discoverability changes.
+    assert.equal(await ui("!document.querySelector('.feed-filters') && !get('record').checkVisibility() && !get('dictate').checkVisibility() && get('filter-archived').closest('.feed-tools') !== null"),true);
+    await ui("get('filter-archived').click()");
+    await until(()=>ui("get('filter-archived').getAttribute('aria-pressed')==='true' && !get('archive-note').hidden"));
+    await ui("get('archive-back').click()");
+    await until(async()=>(await call('state')).feedFilter==='all' && await ui("get('archive-note').hidden"));
+    await ui("document.querySelector('#list .row .row-more').click()");
+    assert.equal(await ui("get('chat-menu').matches(':popover-open') && get('chat-menu').querySelectorAll('button').length"),4);
+    await ui("get('chat-menu').hidePopover()");
+    await call('openChat',me,'demo@c.us');
+    await until(()=>ui("state.thread?.chat==='demo@c.us' && !!document.querySelector('.message-tools [data-act=select]')"));
+    await ui("document.querySelector('.message.incoming .message-tools [data-act=select]').click()");
+    assert.equal(await ui("!get('select-bar').hidden && get('select-count').textContent==='已选 1 条'"),true);
+    await ui("get('select-cancel').click()");
+    assert.equal(await ui("getComputedStyle(document.querySelector('.switches')).gridTemplateColumns.split(' ').length"),3);
+    await ui("get('open-settings').click()");
+    await until(()=>ui("get('settings-dialog').open && document.querySelectorAll('.settings-nav button').length===document.querySelectorAll('.settings-group').length && document.querySelectorAll('.settings-group:not([hidden])').length===1"));
+    await ui("[...document.querySelectorAll('.settings-nav button')].find(b=>b.textContent==='翻译语言与服务').click()");
+    assert.equal(await ui("!get('settings-translation').hidden && get('translate-compact').checkVisibility()"),true);
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'settings.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('translate-compact').checked=true;get('translate-compact').dispatchEvent(new Event('change'));get('settings-close').click()");
+    await until(()=>ui("document.body.classList.contains('translate-compact') && [...document.querySelectorAll('.message-body.translated')].some(b=>!b.querySelector('.message-text').checkVisibility() && b.querySelector('.translation-output').checkVisibility())"));
+    await ui("document.querySelector('.message-body.translated .translation-output').click()");
+    assert.equal(await ui("document.querySelector('.message-body.translated.show-original .message-text').checkVisibility()"),true);
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'compact-translation.png'),(await shell.capturePage()).toPNG()); }
+    await ui("localStorage.removeItem('translation-compact');document.body.classList.remove('translate-compact')");
+    await a.executeJavaScript("sample('等你回复的消息','overview-probe',false,{id:'daniel@c.us',formattedTitle:'Daniel Tan'});true");
+    await call('select',me);
+    await until(()=>ui("!state.thread && !get('overview').hidden && get('overview').querySelectorAll('.overview-row').length>0 && get('emptyTitle').textContent==='待回复的会话' && get('preview-open').hidden"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'overview.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('overview').querySelector('.overview-row').click()");
+    await until(async()=>!!(await call('state')).thread);
+    // Earlier messages that are still on the phone are requested. The phone may answer, or stay silent.
+    await a.executeJavaScript(`(() => {
+      const contact={id:'history@c.us',formattedTitle:'历史同步',endOfHistoryTransferType:0,t:now};
+      chats.set(contact.id,contact);
+      const recent={body:'登录后只同步到这一条',id:{_serialized:'false_history@c.us_NEW1',remote:contact.id,fromMe:false},type:'chat',t:now+950};
+      rows.push(recent); events.get('chat.new_message')(recent);
+      window.historySync={inProgress:true,progress:42,paused:false};
+      window.peerRequests=0;
+      // First the phone does not answer; WhatsApp reports that as an error after its timeout.
+      window.onPeerRequest=chatId=>{ if (chatId!=='history@c.us') return; window.peerRequests++; setTimeout(()=>window.historyEvent('error_history_sync_od','history@c.us'),500); };
+    })()`);
+    await until(async()=>(await call('state')).accounts[0].historySync?.progress===42);
+    await until(()=>ui("get('connections').textContent.includes('同步历史')"));
+    await until(async()=>{const st=await call('state');return (st.feed || st).messages.some(m=>m.chat==='history@c.us');});
+    await call('openChat',me,'history@c.us');
+    await until(async()=>{const st=await call('state');return st.thread?.phoneSilent===true && st.thread.waiting===false && st.more===true;});
+    await until(()=>ui("!get('more').hidden && get('more').textContent.includes('手机没有响应') && get('more').classList.contains('phone-silent')"));
+    assert.equal(await a.executeJavaScript('window.peerRequests'),1);
+    // The user opens WhatsApp on the phone and retries: now the phone answers.
+    await a.executeJavaScript(`window.onPeerRequest=chatId=>{ if (chatId!=='history@c.us') return; window.peerRequests++; setTimeout(()=>{
+      rows.push({body:'手机上更早的消息',id:{_serialized:'false_history@c.us_OLD1',remote:'history@c.us',fromMe:false},type:'chat',t:now-90000});
+      chats.get('history@c.us').endOfHistoryTransferType=1; window.historyEvent('success_history_sync_od','history@c.us'); },600); };true`);
+    await ui("get('more').click()");
+    await until(()=>ui("get('bubbles').textContent.includes('手机上更早的消息') && get('bubbles').textContent.includes('登录后只同步到这一条')"));
+    await until(async()=>{const st=await call('state');return st.thread.waiting===false && !st.thread.phoneSilent && st.more===false;});
+    assert.equal(await a.executeJavaScript('window.peerRequests'),2);
+    await a.executeJavaScript("window.historySync=null;window.onPeerRequest=null;true");
+    await until(async()=>(await call('state')).accounts[0].historySync===null);
+    console.log('PASS: earlier history is requested from the phone and appears without reopening the chat');
     console.log('PASS: unread divider, jump button, drafts, quick replies, search, starred, multi-select, mentions, message info, timer, reorder and preferences');
     console.log('PASS: location, contact card, poll votes, links, stars, labels, calls, status, group members, chat menu and archive');
     if (process.env.RELAY_PERF) {

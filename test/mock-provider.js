@@ -19,7 +19,10 @@ const timerModules = {
   WAWebEphemeralityTypes:{DisappearingModeTrigger:{ChatSettings:'chat_settings'}},
   WAWebWamEnumEphemeralSettingEntryPointType:{EPHEMERAL_SETTING_ENTRY_POINT_TYPE:{CHAT_INFO:1}}
 };
-window.require = name => timerModules[name] || (name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;}} : null);
+const historyEvents = new Map();
+window.historyEvent = (name, jid) => historyEvents.get('history_sync_on_demand_events:' + name)?.(jid);
+window.require = name => timerModules[name] || (name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;window.onPeerRequest?.(chatId);}} :
+  name === 'WAWebHistorySyncOnDemandEvents' ? {WAWebHistorySyncOnDemandEvents:{on:(event,fn)=>historyEvents.set(event,fn)}} : null);
 window.tags = [{id:'1',name:'新客户',hexColor:'#407776'}];
 window.statuses = [{id:'vivian@c.us',contact:{name:'采购 · Vivian'},totalCount:1,unreadCount:1,t:now,msgs:{getModelsArray:()=>[{id:{_serialized:'false_status@broadcast_S1_vivian@c.us'},t:now,type:'chat',body:'本周新品到货',backgroundColor:0xff145347}]}}];
 window.WPP = {
@@ -32,7 +35,7 @@ window.WPP = {
       events.get('conn.link_code_change')('ABCD1234');
       return 'ABCD1234';
     },
-    cancelLinkDeviceCode(){},isAuthenticated:()=>!!localStorage.owner,isMainReady:()=>!!localStorage.owner,getMyUserId:()=>localStorage.owner},
+    cancelLinkDeviceCode(){},getHistorySyncProgress:()=>window.historySync || {inProgress:false,progress:null,paused:false},isAuthenticated:()=>!!localStorage.owner,isMainReady:()=>!!localStorage.owner,getMyUserId:()=>localStorage.owner},
   group:{create:async(name,members)=>{const id='new-group@g.us';chats.set(id,{id,formattedTitle:name,t:now,groupMetadata:{subject:name}});
       return {gid:{_serialized:id},participants:Object.fromEntries(members.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]))};},ensureGroup:async id=>chats.get(id), getParticipants:async()=>[{id:'16505550102@c.us',isAdmin:true},{id:localStorage.owner,isAdmin:true},...(window.added || []).map(id=>({id}))],
     setProperty:async(id,_name,value)=>{chats.get(id).groupMetadata.ephemeralDuration=value;return true;},
@@ -85,7 +88,8 @@ window.WPP = {
     downloadMedia:async id=>String(blobs.get(id)).startsWith('big:') ? new Blob([new Uint8Array(Number(blobs.get(id).slice(4)))],{type:'video/mp4'}) : (await fetch(blobs.get(id))).blob(),
     sendReactionToMessage:async(id,emoji)=>{ if(emoji) reacted.set(id,emoji); else reacted.delete(id); },
     getReactions:async id=>({reactions:reacted.has(id) ? [{aggregateEmoji:reacted.get(id),hasReactionByMe:true,senders:[{}]}] : []}),
-    deleteMessage:async(_chat,id,_media,revoke)=>({id,isRevoked:!!revoke,isDeleted:!revoke}),
+    // Deleting for me removes the stored message, as WhatsApp does, so a later re-read does not bring it back.
+    deleteMessage:async(_chat,id,_media,revoke)=>{ if (!revoke) { const at=rows.findIndex(r=>r.id._serialized===id); if (at>=0) rows.splice(at,1); } return {id,isRevoked:!!revoke,isDeleted:!revoke}; },
     editMessage:async(id,text)=>{ rows.find(r=>r.id._serialized===id).body=text; return {id}; },
     sendLocationMessage:async(chatId,o)=>({id:window.sample('',  'true_'+chatId+'_LOC'+rows.length,true,chats.get(chatId),0,{type:'location',lat:Number(o.lat),lng:Number(o.lng),loc:o.name}).id._serialized}),
     sendVCardContactMessage:async(chatId,c)=>({id:window.sample('BEGIN:VCARD\nFN:'+c.name+'\nTEL;waid='+c.id.split('@')[0]+':+'+c.id.split('@')[0]+'\nEND:VCARD','true_'+chatId+'_VC'+rows.length,true,chats.get(chatId),0,{type:'vcard',vcardFormattedName:c.name}).id._serialized}),

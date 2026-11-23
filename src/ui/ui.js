@@ -60,9 +60,10 @@ function render(s) {
   peopleSearch.setScope(s.feedScope,scope?.name,s.accounts.some(a => a.status === 'online' && (!scope || a.id === scope.id)));
   const unread = scope ? scope.unread : s.accounts.reduce((sum, a) => sum + a.unread,0);
   get('scope-unread').hidden = !unread;
-  get('scope-unread').textContent = String(unread);
+  get('scope-unread').textContent = countLabel(unread);
+  get('scope-unread').title = unread + ' 条未读';
   get('archived-count').hidden = !s.archivedCount;
-  get('archived-count').textContent = String(s.archivedCount || '');
+  get('archived-count').textContent = s.archivedCount ? countLabel(s.archivedCount) : '';
   const dock = get('dock-avatar');
   if (unchanged('dock',[scope?.id,scope?.photoIdentity,s.accounts.map(a=>a.id)]) === false) {
     dock.className = 'dock-icon ' + (scope ? accountTones(s.accounts).get(scope.id) : '');
@@ -70,14 +71,19 @@ function render(s) {
   }
   dock.classList.toggle('online', scope ? scope.status === 'online' : connected > 0);
   get('connections').classList.toggle('online', connected > 0);
-  get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status]].filter(Boolean).join(' · ') : connected + ' / ' + s.accounts.length + ' 个账号已连接';
+  // Right after linking, WhatsApp keeps copying history from the phone for a while.
+  const syncNote = account => account?.historySync ? '同步历史消息' + (account.historySync.progress != null ? ' ' + account.historySync.progress + '%' : '中') : '';
+  const syncing = s.accounts.filter(account => account.historySync).length;
+  get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status],syncNote(scope)].filter(Boolean).join(' · ') :
+    connected + ' / ' + s.accounts.length + ' 个账号已连接' + (syncing ? ' · ' + syncing + ' 个正在同步历史' : '');
   get('location').textContent = scope?.name || '全部账号';
   get('title').textContent = scope ? scope.name + ' · 私信' : '私信';
   get('feed-count').textContent = String(page.count);
+  showFilters(s.feedFilter === 'archived' ? 'archived' : 'all', s.feedKind || 'all');
 
   // An account that still has to be linked has no conversations, so its list column is folded away.
   document.body.classList.toggle('unlinked', scope?.status === 'pair');
-  if (unchanged('feed',[draftStore.version,page.messages,page.count,s.accounts,s.thread?.chat,s.active,s.feedScope,s.feedMore,s.feedFilter]) === false) renderFeed(s,openMessage);
+  if (unchanged('feed',[draftStore.version,page.messages,page.count,s.accounts,s.thread?.chat,s.active,s.feedScope,s.feedMore,s.feedFilter,s.feedKind]) === false) renderFeed(s,openMessage);
   accountHealth.draw(s);
   callBar.render(s);
   const preview = !s.thread && page.messages[0];
@@ -98,13 +104,27 @@ function render(s) {
   get('empty').hidden = !!s.thread;
   get('empty').classList.toggle('message-preview',!!preview && !needsSetup);
 
-  get('preview-open').hidden = !preview || !!needsSetup;
+  // With nothing open, the reader lists the conversations that are waiting for an answer.
+  const waiting = s.thread || needsSetup ? [] : page.messages.filter(m=>m.unreadCount > 0).slice(0,6);
+  if (unchanged('overview',[waiting,s.accounts.map(a=>[a.id,a.name])]) === false) {
+    const names = new Map(s.accounts.map(a=>[a.id,a.name]));
+    get('overview').replaceChildren(...waiting.map(m => {
+      const row = el('button','overview-row'); row.type = 'button';
+      const words = el('span','overview-words');
+      words.append(el('strong','',m.title),el('small','',(s.feedScope ? '' : (names.get(m.accountId) || '')+' · ')+(m.text || '新消息')));
+      row.append(avatar(m.title,m.chat,m.accountId),words,el('span','conversation-unread',countLabel(m.unreadCount)));
+      row.onclick = () => openMessage(m);
+      return row;
+    }));
+  }
+  get('overview').hidden = !waiting.length;
+  get('preview-open').hidden = !preview || !!needsSetup || waiting.length > 0;
   get('preview-open').onclick = preview ? ()=>openMessage(preview) : null;
   get('emptyTitle').textContent = pair ? '关联 WhatsApp 账号' : needsSetup ? statusText[owner.status] :
-    preview ? '最新消息' : '选择一条消息';
+    waiting.length ? '待回复的会话' : preview ? '最新消息' : '选择一条消息';
   get('help').textContent = pair ? '打开手机 WhatsApp，选择「已关联设备」→「关联设备」。' :
     needsSetup ? (['offline','adapter-error'].includes(owner.status) ? '右键点击左侧账号头像，选择「重新连接」。' : '正在准备此账号的会话。') :
-    preview ? preview.text : '从左侧列表打开对话，在这里阅读和回复。';
+    waiting.length ? '共 '+countLabel(unread)+' 条未读，先处理最近的这些：' : preview ? preview.text : '从左侧列表打开对话，在这里阅读和回复。';
   pairingPanel.render(pair ? owner.id : null, s.link, s.qr);
   const firstId = s.thread && s.messages.at(-1)?.id;
   if (changed) { chatTranslation.resetView(); resetMessageRows(); messageMedia.reset(); get('bubbles').replaceChildren(); }
@@ -116,8 +136,10 @@ function render(s) {
   threadSearch.mark();
   get('more').hidden = !s.thread || !(s.more || s.count > s.messages.length);
   get('more').disabled = !!s.thread?.loading;
+  get('more').textContent = s.thread?.waiting ? '正在向手机请求更早的消息…' : s.thread?.phoneSilent ? '更早的消息还在手机上，手机没有响应。请在手机上打开 WhatsApp 并保持联网，然后点这里重试' : '加载更早的消息';
+  get('more').classList.toggle('phone-silent', !!s.thread?.phoneSilent && !s.thread?.waiting);
   get('chat-empty').hidden = !s.thread || Boolean(s.messages.length || s.missingCount);
-  get('chat-empty').textContent = s.thread?.loading ? '正在加载聊天记录…' : '暂无已同步的消息';
+  get('chat-empty').textContent = s.thread?.waiting ? '这段对话的消息还在手机上，正在请求同步，请保持手机联网…' : s.thread?.phoneSilent ? '这段对话的消息还在手机上，但手机没有响应。' : s.thread?.loading ? '正在加载聊天记录…' : '暂无已同步的消息';
   get('composer').hidden = !s.thread;
   get('reply').placeholder = '发送消息给 @' + title;
   get('replyLabel').textContent = '使用 ' + (owner?.name || '') + ' 回复';
@@ -150,10 +172,24 @@ get('newAccount').onsubmit = e=>{
   e.preventDefault(); const name=get('name').value.trim(); if (!name) {get('name-error').textContent='请输入账号名称';get('name').focus();return;}
   get('dialog').close(); run(()=>api.add(name));
 };
-for (const mode of ['all','unread','archived']) get('filter-' + mode).onclick = () => {
-  for (const other of ['all','unread','archived']) get('filter-' + other).setAttribute('aria-pressed', String(mode === other));
+// The tabs narrow the list to private chats, groups or unread. The archive button switches to archived conversations and back.
+const feedKinds = {all:'kind-all',direct:'kind-direct',group:'kind-group',unread:'filter-unread'};
+function showFilters(view, kind) {
+  get('filter-archived').setAttribute('aria-pressed', String(view === 'archived'));
+  get('archive-note').hidden = view !== 'archived';
+  for (const [name,id] of Object.entries(feedKinds)) get(id).setAttribute('aria-pressed', String(name === kind));
+}
+function showArchive(open) {
+  showFilters(open ? 'archived' : 'all', state?.feedKind || 'all');
   if (state) renderFeed(state,openMessage);
-  run(()=>api.filterUnread(mode));
+  run(()=>api.filterUnread(open ? 'archived' : 'inbox'));
+}
+get('filter-archived').onclick = () => showArchive(get('filter-archived').getAttribute('aria-pressed') !== 'true');
+get('archive-back').onclick = () => showArchive(false);
+for (const [kind,id] of Object.entries(feedKinds)) get(id).onclick = () => {
+  showFilters(state?.feedFilter === 'archived' ? 'archived' : 'all', kind);
+  if (state) renderFeed(state,openMessage);
+  run(()=>api.filterUnread('kind:' + kind));
 };
 get('reply').oninput = ()=>{
   get('send').disabled = !canSend(state?.accounts.find(a=>a.id===state.active));

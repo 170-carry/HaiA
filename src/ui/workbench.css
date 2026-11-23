@@ -84,3 +84,82 @@ dialog footer { margin-top:16px; }
 #status-owner { margin-bottom:10px; }
 #group-settings, #group-directory, #call-voice, #call-video, #translation-settings { flex:none; }
 #status-owner, #voice-settings select, #create-group select, #translation-form select, #forward-owner, #group-owner { display:flex; }
+/* Conversation kind tabs replace the list title. */
+.feed-heading { gap:6px; padding:9px 8px 7px 10px; }
+.feed-kinds { display:flex; gap:2px; min-width:0; }
+.feed-kinds button { position:relative; padding:4px 9px; border-radius:13px; font-size:12px; font-weight:600; color:var(--muted); white-space:nowrap; }
+.feed-kinds button:hover { background:var(--soft); color:var(--ink); }
+.feed-kinds button[aria-pressed=true] { background:var(--active); color:var(--ink); }
+/* The count sits at the upper right of the label without covering it. */
+.feed-kinds #filter-unread:has(#scope-unread:not([hidden])) { padding-right:22px; }
+.feed-kinds #scope-unread { position:absolute; top:-3px; right:1px; min-width:16px; padding:0 4px; border-radius:9px; font:700 10px/16px system-ui; }
+/* 1. Composer keeps four controls; voice message and dictation live in the attachment menu. */
+#record, #dictate { display:none; }
+/* 2. The archive is one icon beside the tabs. */
+#filter-archived { position:relative; }
+#filter-archived[aria-pressed=true] { background:var(--active); color:var(--ink); }
+#filter-archived #archived-count { position:absolute; top:-5px; right:-5px; min-width:14px; padding:0 3px; border-radius:8px; background:#5d6070; color:white; font:700 9px/14px system-ui; text-align:center; }
+#archive-note { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:2px 2px 6px; padding:6px 8px 6px 10px; border-radius:7px; background:var(--soft); font-size:12px; color:var(--muted); }
+#archive-back { color:var(--accent-ink); font-size:12px; font-weight:600; padding:2px 6px; border-radius:5px; }
+#archive-back:hover { background:var(--active); }
+/* 3. A visible way into the conversation menu and into multi-select. */
+.row-more { position:absolute; right:6px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:26px; height:26px; border-radius:7px; background:#24252a; border:1px solid var(--line); color:var(--muted); opacity:0; pointer-events:none; }
+.row:hover .row-more, .row:focus-visible .row-more { opacity:1; pointer-events:auto; }
+.row-more:hover { color:var(--ink); background:#3a3b43; }
+.row-more svg { width:15px; height:15px; }
+/* 7. Restrictions are visible in the list. */
+.row-state { flex:none; font-size:10px; font-weight:600; padding:1px 5px; border-radius:5px; border:1px solid #7a6a56; color:#e6c59a; }
+.row-top:has(.row-state) { grid-template-columns:minmax(0,max-content) max-content minmax(0,1fr); }
+.row-top:has(.row-state):has(.group-tag) { grid-template-columns:minmax(0,max-content) max-content max-content minmax(0,1fr); }
+.row-top:has(.row-state) .row-stamp { justify-self:end; }
+/* 4. Profile: a low banner, three quick toggles in a row, and blocking kept apart at the bottom. */
+.profile-banner { height:56px; }
+.switches { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:18px; }
+.switch-row { width:auto; margin:0; flex-direction:column; gap:5px; padding:10px 4px 8px; border-radius:9px; background:#00000026; font-size:12px; text-align:center; border:1px solid transparent; }
+.switch-row span { flex:none; }
+.switch-row .switch { display:none; }
+.switch-row svg { width:18px; height:18px; }
+.switch-row[aria-checked=true] { background:#5865f233; border-color:#5865f2aa; color:var(--ink); }
+.switch-row[aria-checked=true] svg { color:var(--accent-ink); }
+.switch-row.danger-item { grid-column:1/-1; flex-direction:row; justify-content:flex-start; gap:10px; margin-top:14px; padding:9px 10px; background:transparent; border:1px solid #6b3a3f; font-size:13px; text-align:left; }
+.switch-row.danger-item span { flex:1; }
+.switch-row.danger-item .switch { display:block; }
+.switch-row.danger-item[aria-checked=true] { background:#da374422; border-color:#da3744; }
+.switch-row.danger-item[aria-checked=true] > .switch { background:#da3744; }
+/* 5. Every dialog closes with the same quiet cross at the upper right. */
+.people-head button { font-size:0; width:30px; height:30px; padding:0; display:grid; place-items:center; }
+.people-head button::before { content:"✕"; font-size:14px; line-height:1; }
+/* 6. Compact translations. */
+body.translate-compact .message-body.translated:not(.show-original) .message-text { display:none; }
+body.translate-compact .message-body.translated .translation-output { border-top:0; padding-top:0; margin-top:0; color:inherit; cursor:pointer; }
+body.translate-compact .message-body.translated.show-original .translation-output { border-top:1px solid #ffffff32; padding-top:5px; margin-top:5px; color:#d5e1e0; }
+/* 8. Settings in two columns. */
+#settings-dialog { width:min(720px,94vw); padding:20px 22px; overflow:visible; }
+.settings-body { display:grid; grid-template-columns:150px minmax(0,1fr); gap:16px; height:min(540px,70vh); }
+.settings-nav { display:grid; align-content:start; gap:2px; padding-right:10px; border-right:1px solid var(--line); }
+.settings-nav button { padding:8px 10px; border-radius:7px; text-align:left; font-size:13px; font-weight:600; color:var(--muted); }
+.settings-nav button:hover { background:var(--soft); color:var(--ink); }
+.settings-nav button[aria-pressed=true] { background:var(--active); color:var(--ink); }
+.settings-pages { min-width:0; overflow:auto; padding-right:4px; }
+.settings-pages .settings-group { border-top:0; padding-top:0; }
+.settings-pages .settings-group h3 { font-size:15px; color:var(--ink); margin-bottom:12px; }
+@media (max-width:640px) { .settings-body { grid-template-columns:1fr; height:auto; } .settings-nav { display:flex; flex-wrap:wrap; border-right:0; padding:0 0 8px; border-bottom:1px solid var(--line); } }
+/* 9. Orange is for things that need attention. Drafts are neutral; the unread line uses the alert red. */
+.draft-mark { color:var(--accent-ink); }
+.unread-divider { color:#f38a8f; }
+.unread-divider::before, .unread-divider::after { background:#b3474d; }
+/* 10. What is waiting, when nothing is open. */
+#overview { display:grid; gap:4px; width:min(100%,400px); text-align:left; }
+.overview-row { display:flex; align-items:center; gap:10px; width:100%; padding:8px 10px; border-radius:9px; background:var(--surface); border:1px solid var(--line); text-align:left; }
+.overview-row:hover { background:var(--active); }
+.overview-row .avatar { width:32px; height:32px; }
+.overview-words { flex:1; min-width:0; display:grid; }
+.overview-words strong, .overview-words small { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.overview-words small { font-size:12px; color:var(--muted); }
+.message-preview:has(#overview:not([hidden])) #help { -webkit-line-clamp:2; }
+/* Both translation toggles look the same. */
+.settings-choice #translate-compact { appearance:none; position:relative; width:34px; height:19px; padding:0; border:0; border-radius:12px; background:#545660; cursor:pointer; transition:background-color 150ms; flex:none; }
+.settings-choice #translate-compact:checked { background:var(--accent); }
+.settings-choice #translate-compact::after { content:""; position:absolute; width:13px; height:13px; top:3px; left:3px; border-radius:100%; background:white; transition:transform 150ms var(--motion); }
+.settings-choice #translate-compact:checked::after { transform:translateX(15px); }
+#more.phone-silent { max-width:min(460px,90%); white-space:normal; line-height:1.5; text-align:center; color:#ffcfa6; background:#4a3a2c; border:1px solid #7a5a3c; }

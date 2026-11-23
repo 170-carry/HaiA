@@ -69,7 +69,7 @@ const messageActions = (() => {
   get('action-cancel').onclick = () => get('confirm-action').close();
   function tools(message) {
     const bar = el('div','message-tools');
-    for (const [act,symbol,label] of [['react','smile','表情回应'],['reply','reply','回复'],['more','more','更多操作']]) {
+    for (const [act,symbol,label] of [['react','smile','表情回应'],['reply','reply','回复'],['select','check','多选'],['more','more','更多操作']]) {
       const button = el('button');
       button.type = 'button'; button.dataset.act = act; button.title = label; button.setAttribute('aria-label',label);
       button.append(icon(symbol)); bar.append(button);
@@ -99,6 +99,7 @@ const messageActions = (() => {
       origin.scrollIntoView({block:'center',behavior:'smooth'});
       origin.classList.add('flash'); setTimeout(()=>origin.classList.remove('flash'),1600);
     } else if (tool?.dataset.act === 'reply') composerExtras.reply(message);
+    else if (tool?.dataset.act === 'select') messageSelect.start(message);
     else if (tool?.dataset.act === 'react') openReactions(message,tool);
     else if (tool?.dataset.act === 'more') openMore(message,tool);
   });

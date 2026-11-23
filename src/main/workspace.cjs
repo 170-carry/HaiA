@@ -19,6 +19,7 @@ class Workspace {
     this.feedQuery = '';
     this.feedLimit = 100;
     this.filter = 'all';
+    this.kind = 'all';
     this.limit = 100;
     this.thread = null;
     this.epoch = 0;
@@ -50,12 +51,14 @@ class Workspace {
     const digits = phoneSearchDigits(query);
     const owners = new Map(this.accounts.items.map(a => [a.id,a.name]));
     const matches = query ? m => matchesContactQuery(query,digits,m.phone || contactPhoneDigits(m.chat),[m.title,m.text,owners.get(m.accountId)]) : null;
-    const feed = this.inbox.conversations.page(this.feedLimit, this.feedScope, this.filter === 'unread', matches, this.filter === 'archived');
+    // The list is narrowed by kind (all, private chats, groups, unread) inside the inbox or the archive.
+    const group = this.kind === 'group', typed = ['direct','group'].includes(this.kind) ? m => m.chat.endsWith('@g.us') === group && (!matches || matches(m)) : matches;
+    const feed = this.inbox.conversations.page(this.feedLimit, this.feedScope, this.kind === 'unread', typed, this.filter === 'archived');
     const feedMore = this.feedSources().some(s => s.more);
-    return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, feedFilter:this.filter, archivedCount:this.inbox.conversations.archivedCount(this.feedScope), calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
+    return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, feedFilter:this.filter, feedKind:this.kind, archivedCount:this.inbox.conversations.archivedCount(this.feedScope), calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
       const s = this.sessions.get(a.id);
       const phone = s?.status === 'online' && /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(s.identity || '');
-      return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError };
+      return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError, historySync: s?.historySync || null };
     }), ...this.threadPage(feed, deliver), more: this.thread ? this.thread.more : this.sources().some(s => s.more) };
   }
   publish() {
@@ -146,6 +149,8 @@ class Workspace {
     s.unread = batch.unread || 0;
     s.more = !!batch.more;
     s.historyError = !!batch.historyError;
+    const sync = batch.status === 'online' && batch.historySync ? {progress:Number.isFinite(batch.historySync.progress) ? batch.historySync.progress : null, paused:batch.historySync.paused === true} : null;
+    if (JSON.stringify(sync) !== JSON.stringify(s.historySync || null)) { s.historySync = sync; receiptLate = true; }
     if (this.trackLink(s, batch)) receiptLate = true;
     if (batch.status !== 'online' && s.activeCall) { s.activeCall = null; receiptLate = true; }
     if (batch.call !== undefined && batch.status === 'online') {
@@ -290,20 +295,32 @@ class Workspace {
     void this.sessions.get(accountId).call('markRead', msg.chat).catch(() => {});
     void this.sessions.get(accountId).call('watch', msg.chat).catch(() => {});
   }
-  async readThread() {
+  async readThread(retry = false) {
     const epoch = this.epoch;
     const thread = this.thread;
     if (!thread || thread.loading) return;
     thread.loading = true;
     this.publish();
     try {
-      const result = await this.sessions.get(this.active).call('thread', thread.chat, thread.before);
+      const result = await this.sessions.get(this.active).call('thread', thread.chat, thread.before, retry);
       if (this.epoch !== epoch) return;
+      const fresh = result.rows.filter(row => !this.inbox.find(this.active,row.id)).length;
       this.inbox.add(this.active, result.rows);
       const oldest = result.rows.reduce((best, row) => !best || row.time < best.time ? row : best, null);
-      thread.more = !!oldest && oldest.id !== thread.before && result.more;
-      thread.before = oldest?.id;
-      this.limit += 40;
+      const advanced = !!oldest && oldest.id !== thread.before;
+      thread.before = oldest?.id || thread.before;
+      if (fresh) { this.limit += 40; thread.retries = 0; }
+      // The phone was asked for earlier messages. While that request is open the page is read again on its own.
+      // If the phone does not answer, the reader says so and waits for the user to retry.
+      if (retry) thread.retries = 0;
+      thread.waiting = result.waiting === true && (thread.retries || 0) < 12;
+      thread.phoneSilent = result.phoneSilent === true || (result.waiting === true && !thread.waiting);
+      thread.more = result.more === true && (advanced || result.waiting === true || result.phoneSilent === true);
+      clearTimeout(this.older);
+      if (thread.waiting) {
+        thread.retries = (thread.retries || 0) + 1;
+        this.older = setTimeout(() => { if (this.epoch === epoch && this.thread === thread) void this.readThread().catch(() => {}); }, fresh ? 1500 : 4000);
+      }
     } finally { thread.loading = false; this.publish(); }
   }
   // Message actions always target the conversation that is open in the window.
@@ -548,7 +565,7 @@ class Workspace {
     } finally { this.publish(); }
   }
   async more() {
-    if (this.thread) return this.readThread();
+    if (this.thread) return this.readThread(true);
     await this.moreFeed();
   }
   feedSources() {
@@ -561,7 +578,9 @@ class Workspace {
     this.publish();
   }
   filterUnread(value) {
-    this.filter = value === true || value === 'unread' ? 'unread' : value === 'archived' ? 'archived' : 'all';
+    if (typeof value === 'string' && value.startsWith('kind:')) this.kind = ['direct','group','unread'].includes(value.slice(5)) ? value.slice(5) : 'all';
+    else if (value === true || value === 'unread') this.kind = 'unread';
+    else { this.filter = value === 'archived' ? 'archived' : 'all'; if (value === 'all') this.kind = 'all'; }
     this.feedLimit = 100;
     this.publish();
   }
@@ -574,6 +593,7 @@ class Workspace {
   }
   close() {
     clearTimeout(this.queued);
+    clearTimeout(this.older);
     clearTimeout(this.reading);
     for (const session of this.sessions.values()) {
       this.clearNotices(session.account.id);

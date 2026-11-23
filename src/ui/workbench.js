@@ -300,3 +300,35 @@ const settingsExtras = (() => {
   };
   new MutationObserver(() => { if (dialog.open) preferences.ready.then(draw); }).observe(dialog,{attributes:true,attributeFilter:['open']});
 })();
+
+// The settings page shows one group at a time, picked from a list on the left.
+const settingsNav = (() => {
+  const dialog = get('settings-dialog'), groups = [...dialog.querySelectorAll('.settings-group')];
+  const nav = el('nav','settings-nav'), pages = el('div','settings-pages');
+  nav.setAttribute('aria-label','设置分类');
+  groups[0].before(nav,pages);
+  const tabs = groups.map((group,index) => {
+    pages.append(group);
+    const tab = el('button','',group.querySelector('h3').textContent); tab.type = 'button';
+    tab.onclick = () => show(index);
+    nav.append(tab);
+    return tab;
+  });
+  const body = el('div','settings-body');
+  nav.before(body); body.append(nav,pages);
+  function show(target) {
+    const index = typeof target === 'number' ? target : Math.max(0,groups.findIndex(group => group.id === target));
+    groups.forEach((group,at) => { group.hidden = at !== index; });
+    tabs.forEach((tab,at) => tab.setAttribute('aria-pressed',String(at === index)));
+    pages.scrollTop = 0;
+  }
+  show(0);
+  return {show};
+})();
+const compactTranslation = (() => {
+  const box = get('translate-compact');
+  const on = () => { try { return localStorage.getItem('translation-compact') === '1'; } catch { return false; } };
+  function apply() { document.body.classList.toggle('translate-compact',on()); box.checked = on(); }
+  box.onchange = () => { try { localStorage.setItem('translation-compact',box.checked ? '1' : '0'); } catch { /* Stays off. */ } apply(); };
+  apply();
+})();

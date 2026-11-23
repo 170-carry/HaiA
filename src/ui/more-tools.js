@@ -35,7 +35,7 @@ const attachMenu = (() => {
   get('attach').onclick = () => {
     const items = [['clip','图片或文件',()=>{ menu.hidePopover(); composerExtras.pick(); }],['pin','位置',()=>open('location')],
       ['person','联系人名片',()=>open('contact')],['poll','投票',()=>open('poll')],['chat','快捷回复',()=>{ menu.hidePopover(); quickReplies.open(); }],
-      ...(get('record').checkVisibility() ? [] : [['mic','语音消息',()=>{ menu.hidePopover(); get('record').click(); }],['wave','语音输入',()=>{ menu.hidePopover(); get('dictate').click(); }]])].map(([symbol,label,work]) => {
+      ['mic','语音消息',()=>{ menu.hidePopover(); get('record').click(); }],['wave','语音输入（转文字并翻译）',()=>{ menu.hidePopover(); get('dictate').click(); }]].map(([symbol,label,work]) => {
       const button = el('button'); button.type = 'button'; button.setAttribute('role','menuitem');
       button.append(icon(symbol),label); button.onclick = work; return button;
     });

@@ -26,6 +26,11 @@ window.createRelayIndex = function (latestMessages, format, enqueue) {
           const phone = contactPhoneDigits(chat, model.contact?.phoneNumber, model.contact?.formattedUser);
           const mute = model.muteExpiration ?? model.mute?.expiration;
           const flags = {pinned:Boolean(model.pin), archived:Boolean(model.archive), muted:Boolean(model.isMuted || mute === -1 || mute > Date.now()/1000)};
+          // A short status for the list: a suspended or admin-only group, a group this number left, a blocked contact.
+          const meta = model.groupMetadata;
+          let blocked = false;
+          try { blocked = !chat.endsWith('@g.us') && Boolean(WPP.blocklist?.isBlocked?.(chat)); } catch { /* The block list may not be loaded yet. */ }
+          flags.state = meta?.terminated || meta?.suspended ? 'suspended' : chat.endsWith('@g.us') && model.isReadOnly ? 'left' : meta?.announce ? 'announce' : blocked ? 'blocked' : '';
           const stamp = JSON.stringify([title,phone,time,idOf(model.lastReceivedKey),flags]);
           if (known.get(chat) !== stamp) {
             known.set(chat, stamp);

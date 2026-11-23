@@ -8,7 +8,10 @@ class Conversations {
     if (!this.directory.has(accountId)) this.directory.set(accountId,new Map());
     const chats = this.directory.get(accountId);
     for (const row of entries) if (typeof row.chat === 'string' && typeof row.title === 'string') {
-      if (typeof row.pinned === 'boolean') for (const key of ['pinned','archived','muted']) this.setFlag(accountId,row.chat,key,row[key]);
+      if (typeof row.pinned === 'boolean') {
+        for (const key of ['pinned','archived','muted']) this.setFlag(accountId,row.chat,key,row[key]);
+        this.flags.get(accountId).get(row.chat).state = ['suspended','left','announce','blocked'].includes(row.state) ? row.state : '';
+      }
       // The directory carries the current name, so a contact renamed elsewhere is picked up here.
       const latest = this.latest.get(accountId)?.get(row.chat);
       if (latest && row.id === undefined && latest.title !== row.title) latest.title = row.title;
@@ -19,7 +22,7 @@ class Conversations {
   setFlag(accountId, chat, key, value) {
     if (!this.flags.has(accountId)) this.flags.set(accountId,new Map());
     const chats = this.flags.get(accountId);
-    chats.set(chat,{...chats.get(chat),[key]:value === true});
+    chats.set(chat,{state:'',...chats.get(chat),[key]:value === true});
   }
   flagsOf(message) { return this.flags.get(message.accountId)?.get(message.chat) || {}; }
   archivedCount(scope) {
@@ -73,7 +76,7 @@ class Conversations {
     rows.sort((a,b)=>pinned(b)-pinned(a) || b.time-a.time || a.accountId.localeCompare(b.accountId) || a.chat.localeCompare(b.chat));
     return {count: rows.length, messages: rows.slice(0,limit).map(m=>({
       // The list shows text only, so preview images and other bubble detail are left out of it.
-      ...m, media:m.media ? {kind:m.media.kind} : null, link:null, quote:null, poll:null, reactions:[], pinned:false, muted:false, archived:false, ...this.flagsOf(m), unreadCount: this.unread.get(m.accountId)?.get(m.chat) || 0
+      ...m, media:m.media ? {kind:m.media.kind} : null, link:null, quote:null, poll:null, reactions:[], pinned:false, muted:false, archived:false, state:'', ...this.flagsOf(m), unreadCount: this.unread.get(m.accountId)?.get(m.chat) || 0
     }))};
   }
 }

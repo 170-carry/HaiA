@@ -42,7 +42,7 @@ function renderFeed(state, open) {
     preview.append(snippet);
     words.append(top,preview);
     if (m.unreadCount > 0) {
-      const badge = el('span','conversation-unread', m.unreadCount > 99 ? '99+' : String(m.unreadCount));
+      const badge = el('span','conversation-unread', countLabel(m.unreadCount));
       badge.setAttribute('aria-label',m.unreadCount+' 条未读');
       preview.append(badge);
     }
@@ -56,7 +56,13 @@ function renderFeed(state, open) {
       from.append(avatarPhotos.face(owner.id,'self'));
       face.append(from);
     }
-    row.append(face,words); row.onclick = ()=>open(m);
+    const stateLabel = {suspended:'已停用',left:'已退出',announce:'禁言',blocked:'已屏蔽'}[m.state];
+    if (stateLabel) top.firstChild.after(el('span','row-state',stateLabel));
+    // The same menu as a right-click, for people who do not think to right-click.
+    const more = el('span','row-more');
+    more.setAttribute('role','button'); more.title = '置顶、静音、归档等'; more.setAttribute('aria-label',more.title); more.append(icon('more'));
+    more.onclick = event => { event.stopPropagation(); chatMenu.open(m,row,event); };
+    row.append(face,words,more); row.onclick = ()=>open(m);
     row.oncontextmenu = event => { event.preventDefault(); chatMenu.open(m,row,event); };
     items.append(row);
   }
@@ -65,6 +71,7 @@ function renderFeed(state, open) {
   const empty = document.getElementById('feed-empty');
   empty.hidden = !!matches;
   const archived = document.getElementById('filter-archived').getAttribute('aria-pressed') === 'true';
-  empty.textContent = q ? '没有匹配的会话' : unreadOnly ? '没有未读会话' : archived ? '没有已归档的会话' : '暂无会话';
+  const pressed = id => document.getElementById(id).getAttribute('aria-pressed') === 'true';
+  empty.textContent = q ? '没有匹配的会话' : unreadOnly ? '没有未读会话' : pressed('kind-direct') ? '没有单聊' : pressed('kind-group') ? '没有群聊' : archived ? '没有已归档的会话' : '暂无会话';
   document.getElementById('moreFeed').hidden = !(state.feedMore || page.count > page.messages.length);
 }

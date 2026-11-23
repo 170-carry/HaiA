@@ -41,7 +41,7 @@ async function fillTranslationSettings() {
 function openTranslationSettings() {
   run(async () => {
     await settingsPanel.open();
-    get('settings-translation').scrollIntoView({block:'start'});
+    settingsNav.show('settings-translation');
     get('incoming-language').focus({preventScroll:true});
   });
 }

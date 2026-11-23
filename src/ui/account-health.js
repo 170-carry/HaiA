@@ -11,7 +11,7 @@ const accountHealth = (() => {
     return 'wait';
   }
   function detail(account) {
-    if (account.status === 'online') return '运行正常';
+    if (account.status === 'online') return account.historySync ? '运行正常 · 历史消息还在从手机同步' + (account.historySync.progress != null ? '（' + account.historySync.progress + '%）' : '') + '，请保持手机上的 WhatsApp 打开并联网' : '运行正常';
     if (account.dropped) return when(account.dropped.at) + ' 异常退出 · ' + (reasons[account.dropped.reason] || '被 WhatsApp 强制退出，可能触发了风控或临时封号');
     if (account.status === 'offline') return '无法连接 WhatsApp，请检查网络后重新连接';
     if (account.status === 'adapter-error') return '消息接口异常，请重新连接';

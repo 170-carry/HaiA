@@ -43,7 +43,7 @@ function renderRail(state, statuses, select) {
     button.append(tile);
     if (account.unread > 0) {
       const badge = document.createElement('span');
-      badge.className = 'badge'; badge.textContent = account.unread > 99 ? '99+' : String(account.unread);
+      badge.className = 'badge'; badge.textContent = countLabel(account.unread);
       button.append(badge);
     }
     return button;

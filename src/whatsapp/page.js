@@ -151,14 +151,17 @@
       const acknowledgements = [...receipts]; receipts.clear();
       const updates = status === 'online' ? changes.splice(0,500) : [];
       const typing = [...presence]; presence.clear();
-      return { call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online') };
+      let historySync = null;
+      try { const sync = WPP.conn.getHistorySyncProgress?.(); // On a linked account this flag can stay set at 0 % long after linking, so only real progress is reported.
+        if (sync?.inProgress && sync.progress > 0 && sync.progress < 100) historySync = {progress:Number.isFinite(sync.progress) ? Math.round(sync.progress) : null, paused:Boolean(sync.paused)}; } catch { /* Not available on this build. */ }
+      return { historySync, call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online') };
     },
     listGroups:window.relayGroupTools.list, groupInfo:window.relayGroupTools.info, saveGroup:window.relayGroupTools.save,
     more() { index.refresh(); },
     searchPeople: window.relaySearchPeople,
     contactInfo:window.relayContact.info, renameContact:window.relayContact.rename, chatSetting:window.relayContact.set,
     photo: window.relayProfilePhoto,
-    async thread(chatId, before) {
+    async thread(chatId, before, retry) {
       const chat = WPP.chat.get(chatId);
       const worker = recovery;
       const rows = await WPP.chat.getMessages(chatId, { count: 40, id: before || undefined, direction: 'before' });
@@ -166,8 +169,12 @@
       for (const row of messages) worker.observe(row);
       for (const row of rows) if (row.hasReaction && row.id?._serialized) void loadReactions(row.id._serialized);
       for (const row of rows) if (row.type === 'poll_creation' && row.id?._serialized) void loadVotes(row.id._serialized);
-      if (messages.some(row=>row.pendingText)) void requestHistory(chat);
-      return {rows:messages,more:rows.length >= 40};
+      // A short page means the local copy has run out. If the phone still has earlier messages they are asked for.
+      // The answer can take a while, or never come when the phone is asleep or offline.
+      const remote = rows.length < 40 && requestHistory.pending(chat);
+      if (remote || messages.some(row=>row.pendingText)) void requestHistory(chat, retry === true);
+      const transfer = remote ? requestHistory.status(chat) || 'asking' : '';
+      return {rows:messages,more:rows.length >= 40 || remote,waiting:transfer === 'asking',phoneSilent:transfer === 'failed'};
     },
     async markRead(chatId) { await WPP.chat.markIsRead(chatId); return true; },
     async watch(chatId) {

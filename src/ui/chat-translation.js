@@ -22,6 +22,8 @@ const chatTranslation = (() => {
     slot.output.hidden = !result || result.pending || result?.hidden;
     slot.output.textContent = result?.error || result?.text || '';
     slot.output.title = result?.provider || '';
+    // In compact mode a shown translation stands in for the original text.
+    slot.bubble?.classList.toggle('translated', !slot.output.hidden && Boolean(result?.text));
   }
   async function start(slot) {
     if (entries.get(slot.key)?.pending) return;
@@ -59,7 +61,8 @@ const chatTranslation = (() => {
     const button = el('button','message-translate','翻译'), output = el('div','translation-output');
     button.type = 'button'; output.dir = 'auto';
     const key = JSON.stringify([message.accountId,message.chat,message.id,message.text]);
-    const slot = {button,output,key,source:message.text,auto:!message.outgoing,visible:false,hidden:false};
+    const slot = {bubble,button,output,key,source:message.text,auto:!message.outgoing,visible:false,hidden:false};
+    output.onclick = () => { if (document.body.classList.contains('translate-compact')) bubble.classList.toggle('show-original'); };
     observed.set(button,slot);
     draw(slot);
     button.onclick = () => {
