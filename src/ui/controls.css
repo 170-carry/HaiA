@@ -51,5 +51,5 @@ dialog[open]::backdrop { opacity:1; }
 #menu button svg { width:15px; height:15px; }
 #menu button:hover,#menu button:focus-visible { background:#444651; color:white; }
 #remove { color:#ff949d; }
-#account-photo { width:48px; height:48px; } #account-dialog p { margin:3px 0; }
+#account-dialog p { margin:3px 0; }
 

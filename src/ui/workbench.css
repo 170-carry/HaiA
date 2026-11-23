@@ -163,3 +163,25 @@ body.translate-compact .message-body.translated.show-original .translation-outpu
 .settings-choice #translate-compact::after { content:""; position:absolute; width:13px; height:13px; top:3px; left:3px; border-radius:100%; background:white; transition:transform 150ms var(--motion); }
 .settings-choice #translate-compact:checked::after { transform:translateX(15px); }
 #more.phone-silent { max-width:min(460px,90%); white-space:normal; line-height:1.5; text-align:center; color:#ffcfa6; background:#4a3a2c; border:1px solid #7a5a3c; }
+/* Own profile */
+#account-dialog { width:min(470px,94vw); max-height:88vh; overflow:auto; }
+.own-head { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; align-items:center; margin-bottom:10px; }
+#account-photo { width:72px; height:72px; grid-row:span 2; cursor:pointer; padding:0; }
+#account-photo:hover { outline:2px solid var(--ring); outline-offset:2px; }
+.own-photo-actions { display:flex; gap:6px; align-self:end; }
+.own-photo-actions button, .own-field button, .own-blocked-row button { padding:6px 12px; border-radius:7px; font-size:12px; font-weight:600; background:#464852; color:#eeeef5; }
+.own-photo-actions button:hover:not(:disabled), .own-field button:hover:not(:disabled), .own-blocked-row button:hover { filter:brightness(1.12); }
+.own-facts { display:flex; flex-wrap:wrap; gap:2px 10px; align-self:start; font-size:12px; color:var(--muted); }
+.own-facts strong { color:var(--ink); font-size:14px; flex-basis:100%; }
+#own-note { min-height:18px; margin:0 0 6px; font-size:12px; color:#8fe0bd; }
+.own-field { margin-bottom:12px; }
+.own-field > div { display:flex; gap:6px; }
+.own-field input { flex:1; min-width:0; }
+#account-dialog section { padding-top:10px; border-top:1px solid var(--line); margin-top:4px; }
+#account-dialog h3 { margin:0 0 8px; font-size:12px; color:var(--muted); }
+.own-privacy-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 8px; font-weight:400; font-size:14px; }
+.own-privacy-row select { width:auto; min-width:170px; }
+.own-blocked-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:5px 0; font-size:14px; }
+#own-blocked-rows { max-height:150px; overflow:auto; }
+#dock-profile { padding:0; border-radius:50%; flex:none; }
+#dock-profile:hover .dock-icon { outline:2px solid var(--ring); outline-offset:1px; }

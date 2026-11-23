@@ -719,6 +719,30 @@ async function until(fn) {
     await a.executeJavaScript("window.historySync=null;window.onPeerRequest=null;true");
     await until(async()=>(await call('state')).accounts[0].historySync===null);
     console.log('PASS: earlier history is requested from the phone and appears without reopening the chat');
+    // Own profile: name, about, picture, privacy and the label shown in this app.
+    await call('select',me);
+    await a.executeJavaScript("chats.get('demo@c.us').blocked=true;true");
+    await ui("get('dock-profile').click()");
+    await until(()=>ui("get('account-dialog').open && !get('own-online').hidden && get('own-name').value==='销售小张' && get('own-about').value==='忙碌中' && get('own-privacy-rows').querySelectorAll('select').length===6 && get('own-blocked-rows').children.length===1"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'own-profile.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('own-name').value='销售 · 小张';get('own-name').form.requestSubmit()");
+    await until(()=>a.executeJavaScript("window.myName==='销售 · 小张'"));
+    await ui("get('own-about').value='工作日 9 点到 18 点';get('own-about').form.requestSubmit()");
+    await until(()=>a.executeJavaScript("window.myAbout==='工作日 9 点到 18 点'"));
+    await ui("{const choice=get('own-privacy-rows').querySelector('select');choice.value='contacts';choice.dispatchEvent(new Event('change'));}");
+    await until(()=>a.executeJavaScript("window.myPrivacy.lastSeen==='contacts'"));
+    await ui("get('own-blocked-rows').querySelector('button').click()");
+    await until(()=>a.executeJavaScript("chats.get('demo@c.us').blocked===false"));
+    await call('saveProfile',me,'photo',pixel.replace('image/png','image/jpeg'));
+    assert.ok(await a.executeJavaScript("window.myPhoto.startsWith('data:image/jpeg')"));
+    await call('saveProfile',me,'removePhoto');
+    await assert.rejects(()=>call('saveProfile',me,'name',''));
+    await assert.rejects(()=>call('saveProfile',me,'privacy:lastSeen','everyone'));
+    await ui("get('own-label').value='销售一组';get('own-label').form.requestSubmit()");
+    await until(async()=>(await call('state')).accounts[0].name==='销售一组');
+    await call('saveProfile',me,'label','销售 A');
+    await ui("get('account-close').click()");
+    console.log('PASS: own profile name, about, picture, privacy, block list and account label');
     console.log('PASS: unread divider, jump button, drafts, quick replies, search, starred, multi-select, mentions, message info, timer, reorder and preferences');
     console.log('PASS: location, contact card, poll votes, links, stars, labels, calls, status, group members, chat menu and archive');
     if (process.env.RELAY_PERF) {

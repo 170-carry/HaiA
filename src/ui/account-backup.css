@@ -1,0 +1,13 @@
+.account-rail nav { margin-bottom:212px; max-height:calc(100% - 212px); }
+#open-backup { position:absolute; left:0; bottom:166px; width:100%; display:grid; place-items:center; color:var(--muted); }
+#open-backup > i { display:grid; place-items:center; width:40px; height:40px; border-radius:12px; background:var(--soft); }
+#open-backup:hover > i, #open-backup:focus-visible > i { background:var(--active); color:var(--ink); }
+#backup-dialog { width:min(500px,93vw); max-height:85vh; overflow:auto; }
+.backup-field { display:grid; gap:5px; margin-block:12px; color:var(--muted); font-size:13px; }
+.backup-field :is(select,input) { width:100%; }
+.backup-actions { display:flex; justify-content:flex-end; gap:8px; }
+#backup-status { margin-top:10px; color:var(--muted); font-size:13px; }
+#backup-library { margin-top:18px; border-top:1px solid var(--line); padding-top:12px; }
+#backup-log { max-height:30vh; overflow:auto; overflow-wrap:anywhere; }
+.backup-row { margin:8px 0; padding:8px 10px; background:var(--soft); border-radius:8px; }
+.backup-row small { color:var(--muted); } .backup-row p { white-space:pre-wrap; margin:4px 0; }

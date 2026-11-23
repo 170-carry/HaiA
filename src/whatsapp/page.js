@@ -128,6 +128,7 @@
   });
   window.relayReader = {
     ...window.createHistorySearch(format),
+    ...window.createAccountBackupReader(format),
     take() {
       let status = 'loading';
       if (loaderReady) {
@@ -225,6 +226,7 @@
     },
     async star(id, on) { await WPP.chat.starMessage(id,on); changes.push([id,{starred:on}]); return true; },
     messageInfo:window.relayMore.messageInfo, setEphemeral:window.relayMore.setEphemeral,
+    profileInfo:window.relayProfile.info, profileSave:window.relayProfile.save,
     chatLabels:window.relayMore.labels, setLabel:window.relayMore.setLabel, groupMembers:window.relayMore.members,
     statusList:window.relayMore.statusList, statusItems:window.relayMore.statusItems, statusPost:window.relayMore.statusPost,
     callStart:window.relayMore.calls.start, callAccept:window.relayMore.calls.accept, callEnd:window.relayMore.calls.end, callMute:window.relayMore.calls.mute,

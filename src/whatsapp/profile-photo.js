@@ -1,7 +1,11 @@
 window.relayProfilePhoto = async function (who) {
   const id = who === 'self' ? WPP.conn.getMyUserId() : who;
   if (!id || !WPP.contact?.getProfilePictureUrl) return null;
-  const url = await WPP.contact.getProfilePictureUrl(id,false) || await WPP.contact.getProfilePictureUrl(id,true);
+  let url = await WPP.contact.getProfilePictureUrl(id,false) || await WPP.contact.getProfilePictureUrl(id,true);
+  // The account's own picture is sometimes only available through the profile store.
+  if (typeof url !== 'string' && who === 'self') {
+    try { const mine = await WPP.profile.getMyProfilePicture(); url = mine?.eurl || mine?.imgFull || mine?.img; } catch { /* No picture set. */ }
+  }
   if (typeof url !== 'string') return null;
   if (url.startsWith('https:') || url.startsWith('data:image/')) return url;
   if (!url.startsWith('blob:' + location.origin + '/')) return null;

@@ -1,7 +1,7 @@
 {
   "name": "haia",
   "productName": "HaiA",
-  "version": "0.9.10",
+  "version": "0.9.11",
   "description": "A local multi-account WhatsApp desktop inbox",
   "author": "HaiA",
   "private": true,
@@ -18,10 +18,10 @@
     "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
+    "@wppconnect/wa-js": "4.8.2",
     "electron": "45.4.1",
     "electron-builder": "26.18.0",
-    "semver": "7.8.6",
-    "@wppconnect/wa-js": "4.8.2"
+    "semver": "7.8.6"
   },
   "build": {
     "appId": "com.relaydesk.desktop",
@@ -64,5 +64,8 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "tar": "7.5.23"
   }
 }

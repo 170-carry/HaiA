@@ -50,5 +50,5 @@
 @media (prefers-reduced-motion:reduce) { #dictation::before { animation:none; } }
 body.unlinked .work { position:relative; grid-template-columns:0 minmax(0,1fr); }
 body.unlinked .feed { border-right:0; overflow:visible; }
-body.unlinked .feed > :not(.identity), body.unlinked .identity > :not(.dock-icon) { display:none; }
+body.unlinked .feed > :not(.identity), body.unlinked .identity > :not(#dock-profile) { display:none; }
 body.unlinked .identity { position:absolute; left:calc(8px - var(--rail)); bottom:8px; width:calc(var(--rail) - 16px); margin:0; padding:8px 0; justify-content:center; }

@@ -23,6 +23,7 @@ const historyEvents = new Map();
 window.historyEvent = (name, jid) => historyEvents.get('history_sync_on_demand_events:' + name)?.(jid);
 window.require = name => timerModules[name] || (name === 'WAWebSendNonMessageDataRequest' ? {sendPeerDataOperationRequest:async(_kind,{chatId})=>{window.testTransfer=chatId;window.onPeerRequest?.(chatId);}} :
   name === 'WAWebHistorySyncOnDemandEvents' ? {WAWebHistorySyncOnDemandEvents:{on:(event,fn)=>historyEvents.set(event,fn)}} : null);
+window.myPrivacy = {lastSeen:'all',online:'all',profilePicture:'contacts',about:'all',groupAdd:'all',readReceipts:'all'};
 window.tags = [{id:'1',name:'新客户',hexColor:'#407776'}];
 window.statuses = [{id:'vivian@c.us',contact:{name:'采购 · Vivian'},totalCount:1,unreadCount:1,t:now,msgs:{getModelsArray:()=>[{id:{_serialized:'false_status@broadcast_S1_vivian@c.us'},t:now,type:'chat',body:'本周新品到货',backgroundColor:0xff145347}]}}];
 window.WPP = {
@@ -56,13 +57,17 @@ window.WPP = {
     getStatus:async()=>'工作日 9:00–18:00 在线',getCommonGroups:async()=>['fixture@g.us'],
     getBusinessProfile:async()=>({description:'精密五金配件采购',categories:[{localized_display_name:'批发'}],email:'buyer@example.test',website:['https://example.test']}),
     save:async(id,name)=>{const c=chats.get(id);c.saved=name;c.formattedTitle=name;},remove:async id=>{const c=chats.get(id);delete c.saved;c.formattedTitle='+65 8123 4567';}},
-  profile:{isBusiness:()=>localStorage.owner==='one'},
+  profile:{isBusiness:()=>localStorage.owner==='one',getMyProfileName:()=>window.myName || '销售小张',setMyProfileName:async name=>{window.myName=name;return true;},
+    getMyStatus:async()=>window.myAbout || '忙碌中',setMyStatus:async text=>{window.myAbout=text;return true;},
+    setMyProfilePicture:async data=>{window.myPhoto=data;return {status:200};},removeMyProfilePicture:async()=>{window.myPhoto=null;return true;},getMyProfilePicture:async()=>({eurl:window.myPhoto || undefined})},
+  privacy:{get:async()=>window.myPrivacy,setLastSeen:async v=>{window.myPrivacy.lastSeen=v;return v;},setOnline:async v=>{window.myPrivacy.online=v;return v;},setProfilePic:async v=>{window.myPrivacy.profilePicture=v;return v;},
+    setAbout:async v=>{window.myPrivacy.about=v;return v;},setAddGroup:async v=>{window.myPrivacy.groupAdd=v;return v;},setReadReceipts:async v=>{window.myPrivacy.readReceipts=v;return v;}},
   labels:{getAllLabels:async()=>window.tags,addNewLabel:async name=>{const tag={id:String(window.tags.length+1),name,hexColor:'#4e729a'};window.tags.push(tag);return tag;},
     addOrRemoveLabels:async(id,o)=>{const c=chats.get(id);c.labels=(c.labels || []).filter(l=>l!==o.labelId);if(o.type==='add')c.labels.push(o.labelId);}},
   status:{get:id=>window.statuses.find(s=>s.id===id),sendTextStatus:async text=>{window.posted=text;}},
   call:{enableCallInterface:async()=>{},offer:async(to,o)=>{events.get('call.outgoing_call')({id:'out-1',peerJid:to,isVideo:!!o.isVideo});},
     accept:async id=>{events.get('call.accepted')({id});},end:async id=>{events.get('call.ended')({id});},reject:async id=>{window.rejected=id;events.get('call.ended')({id});},setMute:async()=>true},
-  blocklist:{isBlocked:id=>!!chats.get(id)?.blocked,blockContact:async id=>{chats.get(id).blocked=true;},unblockContact:async id=>{chats.get(id).blocked=false;}},
+  blocklist:{all:()=>[...chats.values()].filter(c=>c.blocked).map(c=>c.id),isBlocked:id=>!!chats.get(id)?.blocked,blockContact:async id=>{chats.get(id).blocked=true;},unblockContact:async id=>{chats.get(id).blocked=false;}},
   chat: {
     getMessageById:async id=>rows.find(row=>row.id._serialized===id),
     markIsRead:async id=>{

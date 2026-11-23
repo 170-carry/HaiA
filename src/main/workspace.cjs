@@ -514,6 +514,28 @@ class Workspace {
     }
     await this.openChat(accountId,chat);
   }
+  profileInfo(accountId) { return this.online(accountId).call('profileInfo'); }
+  // Changes the account's own WhatsApp profile, privacy or block list, or the label this app shows for it.
+  async saveProfile(accountId, field, value) {
+    if (field === 'label') {
+      const name = String(value ?? '').trim().slice(0,48);
+      if (!name || !this.sessions.has(accountId)) throw new Error('请填写账号名称');
+      this.accounts.update(accountId,{name});
+      this.publish();
+      return;
+    }
+    const session = this.online(accountId);
+    const privacy = {lastSeen:['all','contacts','none'], profilePicture:['all','contacts','none'], about:['all','contacts','none'], groupAdd:['all','contacts'], online:['all','match_last_seen'], readReceipts:['all','none']};
+    let payload = value;
+    if (field === 'name') { payload = String(value ?? '').trim(); if (!payload || payload.length > 25) throw new Error('名称需要 1 到 25 个字'); }
+    else if (field === 'about') { payload = String(value ?? '').trim(); if (payload.length > 139) throw new Error('签名最多 139 个字'); }
+    else if (field === 'photo') { if (typeof value !== 'string' || !/^data:image\/jpeg;base64,/.test(value.slice(0,30)) || value.length > 2000000) throw new Error('请选择一张图片'); }
+    else if (field === 'removePhoto') payload = null;
+    else if (field === 'unblock') { if (typeof value !== 'string' || !/^[\w.:-]{3,60}@(c\.us|lid|s\.whatsapp\.net)$/.test(value)) throw new Error('无效的联系人'); }
+    else if (typeof field === 'string' && field.startsWith('privacy:') && privacy[field.slice(8)]?.includes(value)) payload = value;
+    else throw new Error('无法修改此项');
+    await session.call('profileSave', field, payload);
+  }
   contactInfo(accountId, chat) {
     return this.current(accountId,chat).session.call('contactInfo', chat);
   }

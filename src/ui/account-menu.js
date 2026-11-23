@@ -26,16 +26,7 @@ const accountMenu=(() => {
     }
   };
   get('reload').onclick=()=>{const owner=selected();menu.hidePopover();if(owner)run(()=>api.reload(owner.id));};
-  get('account-details').onclick=()=>{
-    const owner=selected();menu.hidePopover();if(!owner)return;
-    get('account-photo').className='avatar '+tone(owner.id);
-    get('account-photo').replaceChildren(avatarPhotos.face(owner.id,'self'));
-    get('account-name').textContent=owner.name;
-    get('account-phone').textContent=owner.linkedPhone || '尚无已关联手机号';
-    get('account-connection').textContent=statusText[owner.status] || owner.status;
-    get('account-dialog').showModal();
-  };
-  get('account-close').onclick=()=>get('account-dialog').close();
+  get('account-details').onclick=()=>{ const owner=selected();menu.hidePopover();if(owner) ownProfile.open(owner.id); };
   return {open,selected,get target(){return target;}};
 })();
 

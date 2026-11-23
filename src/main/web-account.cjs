@@ -14,7 +14,7 @@ function adapterSource() {
   if (!adapter) {
     const file = app.isPackaged ? path.join(process.resourcesPath, 'wa-js/dist/wppconnect-wa.js') : require.resolve('@wppconnect/wa-js');
     adapter = 'window.WPPConfig = {disableGoogleAnalytics:true,deviceName:false,linkPreviewApiServers:null};\n' +
-      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','history-search.js','private-timer.js','more-tools.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
+      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','history-search.js','backup.js','private-timer.js','more-tools.js','own-profile.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
   }
   return adapter;
 }

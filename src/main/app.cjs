@@ -69,6 +69,7 @@ else app.whenReady().then(async () => {
     }
   });
   const routes = {
+    ...require('./backup/routes.cjs').backupRoutes(desk,app.getPath('userData')),
     ...require('./group-routes.cjs').groupRoutes(desk),
     ...translationRoutes(app.getPath('userData'),require('electron').safeStorage,require('electron').net.fetch.bind(require('electron').net)),
     state: () => desk.snapshot(),
@@ -79,6 +80,7 @@ else app.whenReady().then(async () => {
     reorder: ids => desk.reorder(ids), searchMessages: (scope, term, starred) => desk.searchMessages(scope, term, starred === true),
     messageInfo: (id, chat, msg) => desk.messageInfo(id, chat, msg), setEphemeral: (id, chat, seconds) => desk.setEphemeral(id, chat, seconds),
     contacts: (id, term) => desk.contacts(id, term),
+    profileInfo: id => desk.profileInfo(id), saveProfile: (id, field, value) => desk.saveProfile(id, field, value),
     sendPath: (id, chat, file, meta) => desk.sendPath(id, chat, file, meta), select: id => desk.select(id), add: name => desk.add(name),
     photo: (id,who) => readPhoto(desk.sessions.get(id),who).catch(()=>null),
     searchFeed: (scope,term) => desk.searchFeed(scope,term),
@@ -106,8 +108,7 @@ else app.whenReady().then(async () => {
       if (id !== desk.active || !desk.sessions.has(id)) throw new Error('请先选择要关联的账号');
       return desk.sessions.get(id).pair(phone);
     },
-    reload: id => desk.sessions.get(id)?.load(),
-    remove: id => desk.remove(id)
+    reload: id => desk.sessions.get(id)?.load()
   };
   for (const [name, handler] of Object.entries(routes)) ipcMain.handle('desk:' + name, (event, ...args) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame ||
