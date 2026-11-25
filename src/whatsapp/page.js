@@ -155,12 +155,12 @@
       let historySync = null;
       try { const sync = WPP.conn.getHistorySyncProgress?.(); // On a linked account this flag can stay set at 0 % long after linking, so only real progress is reported.
         if (sync?.inProgress && sync.progress > 0 && sync.progress < 100) historySync = {progress:Number.isFinite(sync.progress) ? Math.round(sync.progress) : null, paused:Boolean(sync.paused)}; } catch { /* Not available on this build. */ }
-      return { historySync, call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online') };
+      return { historySync, restriction:status === 'online' ? window.relayLimits.take() : null, call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online') };
     },
-    listGroups:window.relayGroupTools.list, groupInfo:window.relayGroupTools.info, saveGroup:window.relayGroupTools.save,
+    listGroups:window.relayGroupTools.list, groupInfo:window.relayGroupTools.info, saveGroup:window.relayGroupTools.save, groupInvite:window.relayGroupTools.invite,
     more() { index.refresh(); },
     searchPeople: window.relaySearchPeople,
-    contactInfo:window.relayContact.info, renameContact:window.relayContact.rename, chatSetting:window.relayContact.set,
+    contactInfo:window.relayContact.info, renameContact:window.relayContact.rename, chatSetting:window.relayContact.set, requestReview:window.relayContact.review,
     photo: window.relayProfilePhoto,
     async thread(chatId, before, retry) {
       const chat = WPP.chat.get(chatId);

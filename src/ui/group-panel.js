@@ -1,6 +1,6 @@
 const groupPanel = (() => {
   const dialog=get('group-dialog'), panel=get('group-panel-body'), status=get('group-status');
-  const labels={list:'群组列表',members:'群成员',settings:'群组设置'};
+  const labels={list:'群组列表',members:'群成员',invite:'邀请链接',settings:'群组设置'};
   let account,chat,revision=0;
   function route(id,next) {
     if ((id!==account || next!==chat) && dialog.open) dialog.close();
@@ -39,14 +39,76 @@ const groupPanel = (() => {
       status.textContent=list.children.length ? '' : '没有匹配的结果';
     };
     search.oninput=draw; panel.append(search);
-    if (manage) {
-      const form=el('form','member-add'), input=el('input'), add=el('button','primary','添加成员');
-      input.placeholder='手机号（含国家区号），多个用逗号分隔'; input.setAttribute('aria-label','要添加的成员手机号');
-      form.append(input,add);
-      form.onsubmit=event=>{ event.preventDefault(); const phones=input.value.split(/[,，;；\n]+/).map(p=>p.trim()).filter(Boolean); if (phones.length) change('add',phones,add); };
-      panel.append(form);
-    }
+    if (manage) picker(rows);
     panel.append(list); draw();
+  }
+  // Members are added by picking contacts, or by typing phone numbers for people who are not contacts yet.
+  function picker(members) {
+    const form=el('form','member-add'), input=el('input'), add=el('button','primary','添加成员');
+    const chips=el('div','member-picked'), found=el('div','member-found'), chosen=new Map(), inside=new Set(members.map(m=>m.id));
+    input.type='search'; input.placeholder='搜索联系人，或输入含国家区号的手机号（多个用逗号分隔）'; input.setAttribute('aria-label','要添加的联系人或手机号');
+    form.append(input,add);
+    const phones=()=>input.value.split(/[,，;；\n]+/).map(p=>p.trim()).filter(p=>/^[1-9]\d{6,14}$/.test(p.replace(/[\s()+-]/g,'')));
+    function drawChosen() {
+      chips.replaceChildren(...[...chosen].map(([id,title])=>{
+        const chip=el('button','member-chip',title); chip.type='button'; chip.title='移除 '+title; chip.append(icon('close'));
+        chip.onclick=()=>{chosen.delete(id);drawChosen();find();};
+        return chip;
+      }));
+      add.textContent=chosen.size ? '添加 '+chosen.size+' 位成员' : '添加成员';
+    }
+    let ticket=0,timer=null;
+    async function find() {
+      const mine=++ticket, term=input.value.trim(), owner=account;
+      if (phones().length) { found.replaceChildren(); return; }
+      try {
+        const rows=await api.contacts(owner,term);
+        if (mine!==ticket || owner!==account) return;
+        found.replaceChildren(...rows.filter(row=>!chosen.has(row.chat) && !inside.has(row.chat)).slice(0,30).map(row=>{
+          const button=el('button','person-result'), words=el('span',''); button.type='button';
+          words.append(el('strong','',row.title),el('small','',row.phone ? '+'+row.phone : ''));
+          button.append(avatar(row.title,row.chat,owner),words);
+          button.onclick=()=>{ if (chosen.size>=50) { status.textContent='一次最多添加 50 位成员'; return; } chosen.set(row.chat,row.title); input.value=''; drawChosen(); find(); input.focus(); };
+          return button;
+        }));
+        found.hidden=!found.children.length;
+      } catch { /* The list of members below still works without suggestions. */ }
+    }
+    input.oninput=()=>{clearTimeout(timer);timer=setTimeout(find,200);};
+    input.onfocus=()=>{ if (!found.children.length) find(); };
+    form.onsubmit=event=>{
+      event.preventDefault();
+      const picked=[...chosen.keys(),...phones()];
+      if (picked.length) change('add',picked,add); else status.textContent='请先选择联系人，或输入含国家区号的手机号';
+    };
+    found.hidden=true;
+    panel.append(form,chips,found);
+  }
+  // The join link with its QR code. Resetting is asked twice because every copy already shared stops working.
+  function invite(result,ticket) {
+    const box=el('div','invite-box'), canvas=document.createElement('canvas'), link=el('input','invite-link'), tools=el('div','invite-tools');
+    const draw=text=>{
+      const cells=qrMatrix(text), quiet=4, scale=Math.max(4,Math.floor(264/(cells.length+quiet*2))), side=(cells.length+quiet*2)*scale, pen=canvas.getContext('2d');
+      canvas.width=canvas.height=side; pen.fillStyle='#fff'; pen.fillRect(0,0,side,side); pen.fillStyle='#000';
+      cells.forEach((row,y)=>row.forEach((on,x)=>{ if (on) pen.fillRect((x+quiet)*scale,(y+quiet)*scale,scale,scale); }));
+      link.value=text;
+    };
+    link.readOnly=true; link.setAttribute('aria-label','群邀请链接'); canvas.className='invite-code'; canvas.setAttribute('role','img'); canvas.setAttribute('aria-label','群邀请二维码');
+    link.onfocus=()=>link.select();
+    const button=(label,work,kind)=>{ const b=el('button',kind || '',label); b.type='button'; b.onclick=()=>work(b); tools.append(b); return b; };
+    button('复制链接',async()=>{ await navigator.clipboard.writeText(link.value); status.textContent='链接已复制'; },'primary');
+    button('复制二维码',()=>canvas.toBlob(async blob=>{ try { await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]); status.textContent='二维码图片已复制，可直接粘贴发送'; } catch { status.textContent='复制失败，请改用"保存二维码"'; } }));
+    button('保存二维码',()=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=(state.thread?.title || '群聊').replace(/[\\/:*?"<>|]/g,'_')+'-邀请二维码.png'; a.click(); });
+    let armed=false;
+    button('重置链接',async b=>{
+      if (!armed) { armed=true; b.textContent='确认重置？旧链接和二维码将失效'; setTimeout(()=>{ if (b.isConnected) { armed=false; b.textContent='重置链接'; } },5000); return; }
+      b.disabled=true;
+      try { const next=await api.groupInvite(account,chat,true); if (ticket===revision) { draw(next.link); status.textContent='已重置，旧链接和二维码不再有效'; } }
+      catch(e) { if (ticket===revision) status.textContent=translationError(e); }
+      finally { armed=false; b.disabled=false; b.textContent='重置链接'; }
+    },'danger-item');
+    box.append(canvas,el('p','invite-note','扫描二维码或打开链接即可加入此群。请只发给你信任的人。'),link,tools);
+    panel.append(box); draw(result.link);
   }
   async function change(action,members,button) {
     const ticket=revision; button.disabled=true;
@@ -54,7 +116,7 @@ const groupPanel = (() => {
       const failed=await api.groupMembers(account,chat,action,members);
       if (ticket!==revision) return;
       await open('members');
-      status.textContent=failed?.length ? '未能添加：'+failed.map(p=>'+'+p).join('、')+'（对方可能限制了被拉入群聊）' : '成员已更新';
+      status.textContent=failed?.length ? '未能添加：'+failed.map(p=>'+'+p).join('、')+'（对方可能限制了被拉入群聊，可以改为发送邀请链接）' : '成员已更新';
     } catch(e) { if (ticket===revision) { status.textContent=translationError(e); button.disabled=false; } }
   }
   function settings(info,ticket) {
@@ -91,10 +153,11 @@ const groupPanel = (() => {
     panel.replaceChildren(); status.textContent='正在加载…';
     if(!dialog.open) dialog.showModal();
     try {
-      const result=tab==='list' ? await api.listGroups(account,chat) : await api.groupInfo(account,chat);
+      const result=tab==='list' ? await api.listGroups(account,chat) : tab==='invite' ? await api.groupInvite(account,chat,false) : await api.groupInfo(account,chat);
       if(ticket!==revision || !dialog.open)return;
       status.textContent='';
       if(tab==='settings') settings(result,ticket);
+      else if(tab==='invite') invite(result,ticket);
       else listRows(tab==='list' ? result : result.members,tab==='list',tab==='members' && result.manage);
     } catch(e){if(ticket===revision && dialog.open) status.textContent=translationError(e);}
   }
@@ -103,6 +166,6 @@ const groupPanel = (() => {
   for(const button of dialog.querySelectorAll('[data-group-tab]')) button.onclick=()=>open(button.dataset.groupTab);
   get('group-directory').onclick=()=>open('list');
   get('group-settings').onclick=()=>open('settings');
-  return {route};
+  return {route,open};
 })();
 

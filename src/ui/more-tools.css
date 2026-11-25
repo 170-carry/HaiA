@@ -156,3 +156,10 @@ main { position:relative; }
   #chat-notice { padding-block:5px; }
   #reply-context { margin-bottom:4px; padding-block:2px; }
 }
+
+/* Review of a group WhatsApp suspended. */
+#chat-notice .notice-action { margin-left:10px; padding:3px 10px; border-radius:6px; background:#7a5a3c; color:#fff2e2; font-size:12px; font-weight:600; }
+#chat-notice .notice-action:hover { filter:brightness(1.15); }
+#review-dialog { width:min(420px,calc(100vw - 40px)); }
+#review-dialog p { color:#c9cbd6; line-height:1.6; margin:8px 0 14px; }
+#review-error { color:#ff9aa5; font-size:13px; min-height:1px; }

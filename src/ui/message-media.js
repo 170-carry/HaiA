@@ -45,8 +45,17 @@ const messageMedia = (() => {
     failed.hidden = true; button.append(failed);
     const show = src => { full = src; img.src = src; img.className = ''; failed.hidden = true; };
     // The preview stays visible when the full picture cannot be fetched, with a note that says so.
-    waiting.set(button,()=>{ failed.hidden = true; return load(message).then(show,()=>{ failed.hidden = false; }); });
-    img.onerror = () => { if (full) { full = null; if (message.media.thumb) { img.src = message.media.thumb; img.className = 'preview'; } failed.hidden = false; } };
+    const key = message.accountId+'\n'+message.id;
+    let again = true;
+    const fail = error => {
+      // The remembered address is dropped, so the next attempt downloads the file again.
+      files.delete(key);
+      failed.title = error ? readable(error) : '';
+      if (again && button.isConnected) { again = false; setTimeout(()=>{ if (button.isConnected && !full) waiting.get(button)(); },4000); return; }
+      failed.hidden = false;
+    };
+    waiting.set(button,()=>{ failed.hidden = true; return load(message).then(show,fail); });
+    img.onerror = () => { if (full) { full = null; if (message.media.thumb) { img.src = message.media.thumb; img.className = 'preview'; } fail(); } };
     observer.observe(button);
     button.onclick = () => {
       if (!full) { waiting.get(button)(); return; }

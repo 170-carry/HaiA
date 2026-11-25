@@ -16,9 +16,17 @@ function groupRoutes(desk) {
       const source=session(id,chat);
       const list=Array.isArray(members) ? [...new Set(members.map(m=>String(m).trim()))] : [];
       if (!['add','remove','promote','demote'].includes(action) || !list.length || list.length>50) throw new Error('请选择 1 到 50 位成员');
-      const ids=list.map(m=>action==='add' ? m.replace(/[\s()+-]/g,'') : m);
-      if (action==='add' ? ids.some(m=>!/^[1-9]\d{6,14}$/.test(m)) : ids.some(m=>!/^[\w.:-]{3,60}@(c\.us|lid|s\.whatsapp\.net)$/.test(m))) throw new Error('请填写含国家区号的手机号');
-      return source.call('groupMembers',chat,action,action==='add' ? ids.map(m=>m+'@c.us') : ids);
+      // A member to add is either a contact picked from the list or a typed phone number.
+      const known=m=>/^[\w.:-]{3,60}@(c\.us|lid|s\.whatsapp\.net)$/.test(m);
+      const ids=list.map(m=>action==='add' && !known(m) ? m.replace(/[\s()+-]/g,'') : m);
+      if (action==='add' ? ids.some(m=>!known(m) && !/^[1-9]\d{6,14}$/.test(m)) : ids.some(m=>!known(m))) throw new Error('请填写含国家区号的手机号');
+      return source.call('groupMembers',chat,action,action==='add' ? ids.map(m=>known(m) ? m : m+'@c.us') : ids);
+    },
+    async groupInvite(id,chat,reset) {
+      const result=await session(id,chat).call('groupInvite',chat,reset===true);
+      const link=String(result?.link || '');
+      if (!/^https:\/\/chat\.whatsapp\.com\/[\w-]{10,64}$/.test(link)) throw new Error('WhatsApp 没有返回邀请链接');
+      return {link};
     },
     async updateGroup(id,chat,field,value) {
       const source=session(id,chat);

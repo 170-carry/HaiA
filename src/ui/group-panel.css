@@ -19,3 +19,17 @@
 .group-field button { margin-top:5px; }
 @media(max-width:900px) { #reader-head:has(#group-directory:not([hidden])) #thread-search { width:88px; } }
 
+
+/* Adding members and the invite link. */
+.member-picked { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .member-picked:empty { display:none; }
+.member-found { margin-top:6px; max-height:180px; overflow:auto; border:1px solid var(--control-edge); border-radius:8px; padding:4px; }
+.invite-box { display:flex; flex-direction:column; align-items:center; gap:12px; padding:8px 0 4px; }
+.invite-code { width:220px; height:220px; border-radius:12px; image-rendering:pixelated; }
+.invite-note { margin:0; color:var(--muted); font-size:13px; text-align:center; }
+.invite-link { width:100%; text-align:center; font-family:ui-monospace,monospace; font-size:13px; }
+.invite-tools { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.invite-tools button { background:#464852; color:#eeeef5; padding:8px 13px; border-radius:7px; font-weight:600; font-size:13px; }
+.invite-tools .primary { background:var(--accent); color:white; } .invite-tools .danger-item { color:#ffaaa3; }
+.invite-tools button:hover { filter:brightness(1.1); }
+.group-quick { display:flex; gap:8px; } .group-quick button { flex:1; padding:8px 6px; border-radius:8px; background:var(--soft); color:var(--ink); font-size:13px; font-weight:600; }
+.group-quick button:hover { filter:brightness(1.15); }

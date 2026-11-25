@@ -74,7 +74,7 @@ function render(s) {
   // Right after linking, WhatsApp keeps copying history from the phone for a while.
   const syncNote = account => account?.historySync ? '同步历史消息' + (account.historySync.progress != null ? ' ' + account.historySync.progress + '%' : '中') : '';
   const syncing = s.accounts.filter(account => account.historySync).length;
-  get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status],syncNote(scope)].filter(Boolean).join(' · ') :
+  get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status],syncNote(scope),accountHealth.limitNote(scope)].filter(Boolean).join(' · ') :
     connected + ' / ' + s.accounts.length + ' 个账号已连接' + (syncing ? ' · ' + syncing + ' 个正在同步历史' : '');
   get('location').textContent = scope?.name || '全部账号';
   get('title').textContent = scope ? scope.name + ' · 私信' : '私信';
@@ -82,7 +82,7 @@ function render(s) {
   showFilters(s.feedFilter === 'archived' ? 'archived' : 'all', s.feedKind || 'all');
 
   // An account that still has to be linked has no conversations, so its list column is folded away.
-  document.body.classList.toggle('unlinked', scope?.status === 'pair');
+  document.body.classList.toggle('unlinked', scope?.status === 'pair' && !scope?.linked);
   if (unchanged('feed',[draftStore.version,page.messages,page.count,s.accounts,s.thread?.chat,s.active,s.feedScope,s.feedMore,s.feedFilter,s.feedKind]) === false) renderFeed(s,openMessage);
   accountHealth.draw(s);
   callBar.render(s);

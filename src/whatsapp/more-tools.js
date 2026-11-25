@@ -125,15 +125,27 @@ window.relayMore = (() => {
       await WPP.call.offer(chatId,{isVideo:video});
       return true;
     },
-    async accept(id) { await WPP.call.accept(id); return true; },
+    async accept(id) {
+      try { await WPP.call.accept(id); }
+      catch (error) {
+        // The caller hung up before the answer: the call bar is cleared instead of staying up with a button that cannot work.
+        if (/not incoming ring|not.?found|no longer/i.test(String(error?.message))) { if (call?.id === id) { call = null; callDirty = true; } throw new Error('对方已挂断，通话已结束'); }
+        throw error;
+      }
+      return true;
+    },
     async end(id) {
       const current = call;
-      if (current?.id === id && current.incoming && current.state === 'ringing') await WPP.call.reject(id); else await WPP.call.end(id);
-      if (call?.id === id) { call = null; callDirty = true; }
+      try { if (current?.id === id && current.incoming && current.state === 'ringing') await WPP.call.reject(id); else await WPP.call.end(id); }
+      catch (error) { if (!/not incoming ring|not.?found|no longer/i.test(String(error?.message))) throw error; }
+      finally { if (call?.id === id) { call = null; callDirty = true; } }
       return true;
     },
     async mute(id, muted) { await WPP.call.setMute(muted,id); if (call?.id === id) { call.muted = muted; callDirty = true; } return true; },
-    take() { if (!callDirty) return undefined; callDirty = false; return call ? {...call} : null; },
+    take() {
+      // WhatsApp stops ringing after about a minute; a ring that is still shown long after that was missed without an "ended" event.
+      if (call && call.state !== 'active' && Date.now() - call.since > 75000) { call = null; callDirty = true; }
+      if (!callDirty) return undefined; callDirty = false; return call ? {...call} : null; },
     reset() { if (call) { call = null; callDirty = true; } }
   };
   return {mentions,messageInfo,setEphemeral,special,link,poll,votes,labels,setLabel,members,statusList,statusItems,statusPost,calls,listen};

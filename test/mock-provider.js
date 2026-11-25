@@ -37,7 +37,7 @@ window.WPP = {
       return 'ABCD1234';
     },
     cancelLinkDeviceCode(){},getHistorySyncProgress:()=>window.historySync || {inProgress:false,progress:null,paused:false},isAuthenticated:()=>!!localStorage.owner,isMainReady:()=>!!localStorage.owner,getMyUserId:()=>localStorage.owner},
-  group:{create:async(name,members)=>{const id='new-group@g.us';chats.set(id,{id,formattedTitle:name,t:now,groupMetadata:{subject:name}});
+  group:{getInviteCode:async()=>window.inviteCode || 'AbCdEfGhIjKlMnOpQrStUv',revokeInviteCode:async()=>(window.inviteCode='ZyXwVuTsRqPoNmLkJiHgFe'),create:async(name,members)=>{const id='new-group@g.us';chats.set(id,{id,formattedTitle:name,t:now,groupMetadata:{subject:name}});
       return {gid:{_serialized:id},participants:Object.fromEntries(members.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]))};},ensureGroup:async id=>chats.get(id), getParticipants:async()=>[{id:'16505550102@c.us',isAdmin:true},{id:localStorage.owner,isAdmin:true},...(window.added || []).map(id=>({id}))],
     setProperty:async(id,_name,value)=>{chats.get(id).groupMetadata.ephemeralDuration=value;return true;},
     addParticipants:async(_g,ids)=>{window.added=ids.slice(0,1);return Object.fromEntries(ids.map((m,i)=>[m,{wid:m,code:i ? 403 : 200}]));},removeParticipants:async(_g,ids)=>{window.added=(window.added || []).filter(id=>!ids.includes(id));},promoteParticipants:async()=>{},demoteParticipants:async()=>{},
@@ -104,6 +104,6 @@ window.WPP = {
     starMessage:async(id,star)=>({id,star}), markIsUnread:async id=>{const c=chats.get(id);c.unreadCount=-1;events.get('chat.unread_count_changed')?.({chat:c,unreadCount:-1});},
     forwardMessage:async(to,id)=>{ window.forwarded=[to,id]; return true; },
     markIsComposing:async id=>{ window.composing=id; }, markIsPaused:async()=>{},
-    mute:async id=>{chats.get(id).isMuted=true;},unmute:async id=>{chats.get(id).isMuted=false;},pin:async(id,on)=>{chats.get(id).pin=on?1:0;},archive:async(id,on)=>{chats.get(id).archive=on;}
+    mute:async(id,time)=>{if(time?.expiration<Date.now()/1000)throw new Error('Negative duration for mute');chats.get(id).isMuted=true;},unmute:async id=>{chats.get(id).isMuted=false;},pin:async(id,on)=>{chats.get(id).pin=on?1:0;},archive:async(id,on)=>{chats.get(id).archive=on;}
   }
 };

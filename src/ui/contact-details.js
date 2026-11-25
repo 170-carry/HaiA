@@ -63,14 +63,53 @@ const contactDetails = (() => {
     const reason = !info ? '' : limits?.terminated ? '此群已被 WhatsApp 永久关闭，无法发送消息。' : limits?.suspended ? '此群已被 WhatsApp 停用，无法发送消息。' :
       limits?.left ? '你已不在此群中，无法发送消息。' : muted ? '此群已开启全员禁言，仅管理员可以发送消息。' :
       info.blocked ? '你已屏蔽此联系人，取消屏蔽后才能发送消息。' : limits?.blocked ? 'WhatsApp 不允许在此会话中发送消息。' : '';
-    const tag = limits?.terminated ? '已关闭' : limits?.suspended ? '已停用' : limits?.left ? '已退出' : limits?.announce ? '全员禁言' : '';
+    const tag = limits?.terminated ? '已关闭' : limits?.suspended ? (limits.review === 'review' ? '审核中' : '已停用') : limits?.left ? '已退出' : limits?.announce ? '全员禁言' : '';
     get('chat-limit').hidden = !tag; get('chat-limit').textContent = tag;
     get('chat-notice').hidden = !reason && !(limits?.announce && limits.admin);
     get('chat-notice').textContent = reason || '此群已开启全员禁言，你是管理员，仍可发言。';
+    // A suspended group can be sent to WhatsApp for review, as WhatsApp offers when such a group is opened.
+    if (limits?.suspended && !limits.terminated) {
+      const label = limits.review === 'review' ? 'WhatsApp 正在审核' : limits.review === 'rejected' ? '审核未通过' : limits.admin ? '请求审核' : '了解详情';
+      get('chat-notice').textContent = limits.review === 'review' ? '此群已被 WhatsApp 停用，审核请求已提交。' : limits.review === 'rejected' ? '此群已被 WhatsApp 停用，审核未通过。' : reason;
+      const more = el('button','notice-action',label);
+      more.type = 'button'; more.onclick = () => review(false);
+      get('chat-notice').append(more);
+      review(true);
+    } else if (get('review-dialog').open) get('review-dialog').close();
     const locked = Boolean(reason);
     if (get('composer').classList.toggle('locked',locked) !== lockedBefore) { lockedBefore = locked; get('reply').dispatchEvent(new Event('input')); }
   }
   let lockedBefore = false;
+  // Opens by itself once for each suspended group, the first time it is shown; afterwards only from the notice.
+  const offered = new Set();
+  function review(automatic) {
+    const limits = info?.limits, chat = target, panel = get('review-dialog');
+    if (!limits?.suspended || !chat) return;
+    const id = chat.account + ' ' + chat.chat;
+    if (automatic && (offered.has(id) || limits.review === 'review' || !limits.admin || document.querySelector('dialog[open]'))) return;
+    offered.add(id);
+    const when = limits.reviewAt ? new Date(limits.reviewAt).toLocaleString('zh-CN',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const [title,detail] = limits.review === 'review' ? ['WhatsApp 正在审核此群','审核请求已提交' + (when ? '（' + when + '）' : '') + '。审核期间群组仍然不可用，WhatsApp 给出结果后这里会更新。'] :
+      limits.review === 'rejected' ? ['审核未通过','WhatsApp 审核后决定维持停用' + (when ? '（' + when + '）' : '') + '，此群无法再发送消息。'] :
+      limits.admin ? ['此群已被 WhatsApp 停用','群成员暂时无法发送消息。如果你认为这是误判，可以请 WhatsApp 重新审核；提交后需要等待 WhatsApp 的结果。'] :
+      ['此群已被 WhatsApp 停用','群成员暂时无法发送消息。只有群管理员可以请 WhatsApp 重新审核。'];
+    get('review-title').textContent = title; get('review-detail').textContent = detail; get('review-error').textContent = '';
+    const ask = get('review-confirm');
+    ask.hidden = !limits.admin || Boolean(limits.review); ask.disabled = false; ask.textContent = '请求审核';
+    get('review-cancel').textContent = ask.hidden ? '知道了' : '暂不请求';
+    ask.onclick = async () => {
+      ask.disabled = true; ask.textContent = '正在提交…'; get('review-error').textContent = '';
+      try {
+        const result = await api.requestReview(chat.account,chat.chat);
+        panel.close();
+        // The details may have been read again while the request was on its way, so the copy now shown is the one updated.
+        if (target?.account === chat.account && target.chat === chat.chat && info?.limits) { info.limits.review = 'review'; info.limits.reviewAt = result.at; draw(); void load(); }
+        warning('审核请求已提交，等待 WhatsApp 的结果。');
+      } catch (error) { ask.disabled = false; ask.textContent = '请求审核'; get('review-error').textContent = readable(error); }
+    };
+    if (!panel.open) panel.showModal();
+  }
+  get('review-cancel').onclick = () => get('review-dialog').close();
   function draw() {
     const group = target?.chat.endsWith('@g.us');
     const named = Boolean(info?.remark);
@@ -84,15 +123,25 @@ const contactDetails = (() => {
     const rows = [];
     limit();
     if (group) {
-      const states = info.limits ? [[info.limits.suspended,'已被 WhatsApp 停用'],[info.limits.terminated,'已被 WhatsApp 永久关闭'],[info.limits.left,'你已不在此群中'],
+      const states = info.limits ? [[info.limits.suspended,'已被 WhatsApp 停用'],[info.limits.suspended && info.limits.review === 'review','WhatsApp 正在审核'],
+        [info.limits.suspended && info.limits.review === 'rejected','审核未通过'],[info.limits.terminated,'已被 WhatsApp 永久关闭'],[info.limits.left,'你已不在此群中'],
         [info.limits.announce,'全员禁言 · 仅管理员可发言'],[info.limits.restrict,'仅管理员可修改群资料'],[info.limits.approval,'新成员需管理员批准'],
         [info.limits.admin,'你是管理员']].filter(([on])=>on).map(([,label])=>label) : [];
       if (states.length) {
         const row = el('div','detail');
         row.append(el('span','detail-label','群状态'));
         const list = el('ul','limit-list');
-        for (const label of states) list.append(el('li',/停用|关闭|不在|禁言/.test(label) ? 'warn' : '',label));
+        for (const label of states) list.append(el('li',/停用|关闭|不在|禁言|审核/.test(label) ? 'warn' : '',label));
         row.append(list); rows.push(row);
+      }
+      if (!info.limits?.left && !info.limits?.suspended && !info.limits?.terminated) {
+        // The two things people most often look for in a group, without opening the group dialog first.
+        const quick = el('div','detail group-quick');
+        for (const [label,tab] of [['添加成员','members'],['邀请链接 / 二维码','invite']]) {
+          const button = el('button','',label); button.type = 'button'; button.onclick = () => groupPanel.open(tab);
+          quick.append(button);
+        }
+        rows.push(quick);
       }
       if (info.description) rows.push(field('群描述',info.description));
       if (info.created) rows.push(field('创建时间',new Date(info.created).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'})));

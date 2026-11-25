@@ -17,13 +17,25 @@ const types = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/we
 const files = new Map(), pending = new Map();
 let folder;
 
+// Each running copy of the app keeps its own folder, named after its process, so that a second copy (or a test run)
+// cannot empty the folder this one is serving pictures from.
 function directory() {
   if (!folder) {
-    folder = path.join(app.getPath('temp'),'haia-media');
+    const base = app.getPath('temp');
+    folder = path.join(base,'haia-media-' + process.pid);
+    for (const name of fs.readdirSync(base)) {
+      const owner = /^haia-media-(\d+)$/.exec(name);
+      if (!owner || name === path.basename(folder)) continue;
+      // Left behind by a copy that is no longer running. The folder without a number belongs to older versions and is left alone.
+      let alive = true;
+      try { process.kill(Number(owner[1]),0); } catch (error) { alive = error.code === 'EPERM'; }
+      if (!alive) fs.rmSync(path.join(base,name),{recursive:true,force:true});
+    }
     fs.rmSync(folder,{recursive:true,force:true});
-    fs.mkdirSync(folder,{recursive:true});
     app.once('quit',() => fs.rmSync(folder,{recursive:true,force:true}));
   }
+  // The system may clear temporary files while the app is running.
+  fs.mkdirSync(folder,{recursive:true});
   return folder;
 }
 // Oldest downloads are removed first once the cache is over its limit.
@@ -63,7 +75,9 @@ async function fetchToDisk(session, message) {
 // Concurrent requests for the same message share one download.
 function download(session, message) {
   const key = JSON.stringify([session.account.id,session.identity,message.id]), ready = files.get(key);
-  if (ready) { files.delete(key); files.set(key,ready); return Promise.resolve(ready); }
+  // A file that has since been removed from disk is fetched again instead of being served as a broken picture.
+  if (ready && fs.existsSync(ready.path)) { files.delete(key); files.set(key,ready); return Promise.resolve(ready); }
+  if (ready) files.delete(key);
   if (!pending.has(key)) {
     pending.set(key, fetchToDisk(session,message).then(file => { files.set(key,file); evict(); return file; }).finally(() => pending.delete(key)));
   }

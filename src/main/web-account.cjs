@@ -4,6 +4,8 @@ const path = require('node:path');
 
 const { normalizePairingPhone } = require('../shared/phone-number.js');
 
+const {effectiveRestriction}=require('./account-health/state.cjs');
+
 const WEB = 'https://web.whatsapp.com';
 function trusted(url) {
   try { return new URL(url).origin === WEB; } catch { return false; }
@@ -14,7 +16,7 @@ function adapterSource() {
   if (!adapter) {
     const file = app.isPackaged ? path.join(process.resourcesPath, 'wa-js/dist/wppconnect-wa.js') : require.resolve('@wppconnect/wa-js');
     adapter = 'window.WPPConfig = {disableGoogleAnalytics:true,deviceName:false,linkPreviewApiServers:null};\n' +
-      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','history-search.js','backup.js','private-timer.js','more-tools.js','own-profile.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
+      fs.readFileSync(file, 'utf8') + '\n;' + fs.readFileSync(path.join(__dirname, '../whatsapp/link-code.js'), 'utf8') + '\n;' + ['../shared/phone-number.js','preview-history.js','chat-index.js','contact-search.js','message-recovery.js','history-transfer.js','profile-photo.js','group-message.js','group-tools.js','system-notices.js','message-extras.js','contact-details.js','history-search.js','backup.js','private-timer.js','more-tools.js','own-profile.js','account-limits.js','page.js'].map(name => fs.readFileSync(path.join(__dirname, '../whatsapp', name), 'utf8')).join('\n;') + '\n;true';
   }
   return adapter;
 }
@@ -88,10 +90,13 @@ class WebAccount {
   }
   // A failed connection is retried on its own: after 5 s, then 15 s, 30 s, 1 min and every 2 min.
   watch(status) {
+    if(effectiveRestriction(this.account,this)) {
+      clearTimeout(this.retry);this.retry=null;return;
+    }
     if (['offline','adapter-error'].includes(status)) {
       if (this.retry || this.disposed) return;
       const delay = [5,15,30,60,120][Math.min(this.attempts || 0,4)] * 1000;
-      this.retry = setTimeout(() => { this.retry = null; this.attempts = (this.attempts || 0) + 1; if (!this.disposed) this.load(); }, delay);
+      this.retry = setTimeout(() => { this.retry = null; this.attempts = (this.attempts || 0) + 1; if (!this.disposed && !effectiveRestriction(this.account,this)) this.load(); }, delay);
     } else if (status === 'online' || status === 'pair') {
       this.attempts = 0;
       clearTimeout(this.retry); this.retry = null;

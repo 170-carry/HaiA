@@ -367,12 +367,13 @@ async function until(fn) {
     assert.equal(await ui("!get('dictate').hidden && get('dictation').hidden"),true);
     await b.executeJavaScript("localStorage.removeItem('owner');true");
     await until(async()=>!!(await call('state')).accounts[1].dropped);
+    assert.ok((await call('conversations',accounts[1].id)).some(c=>c.chat==='demo@c.us'));
     await ui("get('health').click()");
     await until(()=>ui("get('health-dialog').open && get('health-count').textContent==='1' && !!get('health-list').querySelector('.health-row.bad') && get('health-list').querySelectorAll('.health-row.ok').length===1"));
-    assert.ok(await ui("get('health-list').querySelector('.health-row.bad').textContent.includes('异常退出') && get('health-list').querySelector('.health-row.bad .health-action').textContent==='重新关联'"));
-    await ui("get('health-list').querySelector('.health-row.bad .health-action').click()");
-    await until(()=>ui("!get('health-dialog').open && document.body.classList.contains('unlinked') && !get('list').checkVisibility() && !get('query').checkVisibility() && get('dock-avatar').checkVisibility()"));
-    assert.equal(await ui("document.querySelector('.reader').getBoundingClientRect().left - document.querySelector('.account-rail').getBoundingClientRect().right < 2"),true);
+    assert.ok(await ui("get('health-list').querySelector('.health-row.bad').textContent.includes('异常退出') && [...get('health-list').querySelectorAll('.health-row.bad .health-action')].some(b=>b.textContent==='重新关联')"));
+    await ui("[...get('health-list').querySelectorAll('.health-row.bad .health-action')].find(b=>b.textContent==='重新关联').click()");
+    await until(()=>ui("!get('health-dialog').open && !document.body.classList.contains('unlinked') && get('list').checkVisibility() && get('query').checkVisibility() && get('dock-avatar').checkVisibility()"));
+    assert.equal(await ui("document.querySelector('.reader').getBoundingClientRect().left > document.querySelector('.feed').getBoundingClientRect().left"),true);
     if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'unlinked.png'),(await shell.capturePage()).toPNG()); }
     await ui("get('health').click()");
     await until(()=>ui("get('health-dialog').open"));
@@ -432,7 +433,32 @@ async function until(fn) {
     await until(()=>ui("get('group-status').textContent.includes('+8613800138000') && get('group-panel-body').querySelectorAll('.group-row').length===3"));
     await ui("[...get('group-panel-body').querySelectorAll('.member-tools .danger-item')].at(-1).click()");
     await until(()=>ui("get('group-status').textContent==='成员已更新' && get('group-panel-body').querySelectorAll('.group-row').length===2"));
+    // A contact is picked from the list instead of typing a number, then removed again.
+    await ui("get('group-panel-body').querySelector('.member-add input').dispatchEvent(new Event('focus'))");
+    await until(()=>ui("get('group-panel-body').querySelectorAll('.member-found .person-result').length>0"));
+    await ui("get('group-panel-body').querySelector('.member-found .person-result').click()");
+    await until(()=>ui("get('group-panel-body').querySelectorAll('.member-picked .member-chip').length===1 && get('group-panel-body').querySelector('.member-add .primary').textContent==='添加 1 位成员'"));
+    await ui("get('group-panel-body').querySelector('.member-add').requestSubmit()");
+    await until(()=>ui("get('group-status').textContent==='成员已更新' && get('group-panel-body').querySelectorAll('.group-row').length===3"));
+    assert.match((await a.executeJavaScript('window.added'))[0],/@(c\.us|lid)$/);
+    await ui("[...get('group-panel-body').querySelectorAll('.member-tools .danger-item')].at(-1).click()");
+    await until(()=>ui("get('group-status').textContent==='成员已更新' && get('group-panel-body').querySelectorAll('.group-row').length===2"));
+    // The invite link is shown with a QR code; resetting it asks twice and then shows the new link.
+    await ui("document.querySelector('[data-group-tab=invite]').click()");
+    await until(()=>ui("get('group-panel-body').querySelector('.invite-link')?.value==='https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv' && get('group-panel-body').querySelector('.invite-code').width>=200"));
+    assert.deepEqual(await ui("(()=>{const c=get('group-panel-body').querySelector('.invite-code'),p=c.getContext('2d'),s=c.width/37;const at=(x,y)=>p.getImageData((x+4.5)*s,(y+4.5)*s,1,1).data[0];return [at(0,0),at(1,1),at(3,3),at(7,7),at(6,8)];})()"),[0,255,0,255,0]);
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'group-invite.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('group-panel-body').querySelector('.invite-tools .danger-item').click()");
+    await until(()=>ui("get('group-panel-body').querySelector('.invite-tools .danger-item').textContent.includes('确认重置')"));
+    assert.equal(await ui("get('group-panel-body').querySelector('.invite-link').value"),'https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv');
+    await ui("get('group-panel-body').querySelector('.invite-tools .danger-item').click()");
+    await until(()=>ui("get('group-panel-body').querySelector('.invite-link').value==='https://chat.whatsapp.com/ZyXwVuTsRqPoNmLkJiHgFe' && get('group-status').textContent.includes('已重置')"));
     await ui("get('group-close').click()");
+    await until(()=>ui("document.querySelectorAll('#profile-details .group-quick button').length===2"));
+    await ui("document.querySelectorAll('#profile-details .group-quick button')[1].click()");
+    await until(()=>ui("get('group-dialog').open && get('group-dialog-title').textContent==='邀请链接' && !!get('group-panel-body').querySelector('.invite-link')"));
+    await ui("get('group-close').click()");
+    console.log('PASS: adding members from contacts, invite link, QR code and link reset');
     const rowOf=chat=>"[...document.querySelectorAll('#list .row')].find(r=>JSON.parse(r.dataset.message)[1]==="+JSON.stringify(chat)+")";
     await ui(rowOf('demo@c.us')+".dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:200,clientY:300}))");
     assert.deepEqual(await ui("get('chat-menu').matches(':popover-open') && [...get('chat-menu').querySelectorAll('button')].map(b=>b.textContent)"),['置顶','取消静音','归档','标为未读']);
@@ -467,12 +493,40 @@ async function until(fn) {
     await call('openChat',me,G);
     await until(()=>ui("!get('composer').hidden && !get('composer').classList.contains('locked') && get('chat-limit').hidden"));
     await a.executeJavaScript(`(() => {
-      const meta=chats.get('fixture@g.us').groupMetadata; meta.announce=true; meta.suspended=true;
+      const meta=chats.get('fixture@g.us').groupMetadata; meta.announce=true; meta.suspended=true; meta.participants={length:3,iAmAdmin:()=>true};
+      const base=window.require; window.appeals=[];
+      window.require = name => name === 'WAWebGroupSuspensionAppealMutation' ? {submitGroupSuspensionAppeal:async(jid,reason,debug)=>{ window.appeals.push([jid,reason,typeof debug]);
+        return window.appeals.length === 1 ? {success:false,errorMessage:'RATE_LIMITED'} : {success:true,appealCreationTime:now/1000|0}; }} : base(name);
       const msg={body:'',type:'gp2',subtype:'suspend',id:{_serialized:'limit-fixture',remote:'fixture@g.us',fromMe:false},t:now+500};
       rows.push(msg); events.get('chat.new_message')(msg);
     })()`);
     await until(()=>ui("get('composer').classList.contains('locked') && get('chat-notice').textContent.includes('已被 WhatsApp 停用') && get('chat-limit').textContent==='已停用' && !get('reply').checkVisibility()"));
     await until(()=>ui("[...document.querySelectorAll('.limit-list li')].map(li=>li.textContent).join('|').includes('已被 WhatsApp 停用|全员禁言 · 仅管理员可发言') && get('bubbles').textContent.includes('此群已被 WhatsApp 停用')"));
+    // An admin is offered WhatsApp's review once; a refusal is shown, an accepted request turns the group to "under review".
+    await until(()=>ui("get('review-dialog').open && !get('review-confirm').hidden && get('chat-notice').querySelector('.notice-action').textContent==='请求审核'"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'group-review.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('review-confirm').click()");
+    await until(()=>ui("get('review-dialog').open && get('review-error').textContent.includes('RATE_LIMITED') && !get('review-confirm').disabled"));
+    await ui("get('review-confirm').click()");
+    await until(()=>ui("!get('review-dialog').open && get('chat-limit').textContent==='审核中' && get('chat-notice').textContent.includes('审核请求已提交') && [...document.querySelectorAll('.limit-list li')].some(li=>li.textContent==='WhatsApp 正在审核')"));
+    await until(()=>ui("[...document.querySelectorAll('.row-state')].some(n=>n.textContent==='审核中')"));
+    assert.deepEqual(await a.executeJavaScript('window.appeals'),[['fixture',null,'string'],['fixture',null,'string']]);
+    assert.equal((await call('contactInfo',me,G)).limits.review,'review');
+    await ui("get('chat-notice').querySelector('.notice-action').click()");
+    await until(()=>ui("get('review-dialog').open && get('review-confirm').hidden && get('review-title').textContent==='WhatsApp 正在审核此群'"));
+    await ui("get('review-cancel').click()");
+    console.log('PASS: suspended group review request, refusal and under-review state');
+    // A number WhatsApp stopped from starting new chats stays connected and shows when the limit ends.
+    await a.executeJavaScript(`(() => { const base=window.require; window.limitRecord={state:1,time_enforcement_ends:Date.now()+26*3600000+5*60000,enforcement_type:0};
+      window.require = name => name === 'WAWebUserPrefsIndexedDBStorage' ? {userPrefsIdb:{get:key=>key === 'WAReachoutTimelockState' ? window.limitRecord : null}} : base(name); })()`);
+    await until(()=>ui("state.accounts[0].status==='online' && state.accounts[0].restriction?.kind==='new-chats' && /被限制向新联系人发消息 · 1 天 2 小时 \\d+ 分钟后预计到期/.test(get('connections').textContent) && !get('health-count').hidden"));
+    await ui("get('health').click()");
+    await until(()=>ui("get('health-dialog').open && document.querySelector('.health-title.limit')?.textContent==='受限账号 · 1' && document.querySelector('.health-row.limit small').textContent.includes('后预计到期')"));
+    if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'account-restricted.png'),(await shell.capturePage()).toPNG()); }
+    await ui("get('health-close').click()");
+    await a.executeJavaScript('window.limitRecord=null');
+    await until(()=>ui("!state.accounts[0].restriction && !get('connections').textContent.includes('被限制')"));
+    console.log('PASS: new-chat restriction shown with countdown and cleared when lifted');
     if (process.env.RELAY_UI_CAPTURE) { await pause(1200); fs.writeFileSync(path.join(process.env.RELAY_UI_CAPTURE,'group-limits.png'),(await shell.capturePage()).toPNG()); }
     await a.executeJavaScript(`(() => {
       const meta=chats.get('fixture@g.us').groupMetadata; meta.announce=false; meta.suspended=false;

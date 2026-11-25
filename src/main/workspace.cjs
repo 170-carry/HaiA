@@ -2,6 +2,7 @@ const { Notification, shell, systemPreferences, app, powerMonitor } = require('e
 const { Inbox } = require('./inbox.cjs');
 const { WebAccount } = require('./web-account.cjs');
 const media = require('./media.cjs');
+const accountHealth = require('./account-health/state.cjs');
 
 const {phoneSearchDigits, contactPhoneDigits, matchesContactQuery} = require('../shared/phone-number.js');
 
@@ -25,7 +26,7 @@ class Workspace {
     this.epoch = 0;
     for (const account of accounts.items) this.attach(account);
     // After sleep the pages are usually stale; accounts that are not online are loaded again at once.
-    powerMonitor.on('resume', () => { for (const s of this.sessions.values()) if (!['online','pair'].includes(s.status)) s.load(); });
+    powerMonitor.on('resume', () => { for (const s of this.sessions.values()) if (!['online','pair'].includes(s.status) && !accountHealth.effectiveRestriction(s.account,s)) s.load(); });
     // Coming back to the window reads whatever arrived in the open conversation meanwhile.
     win.on('focus', () => { if (this.thread && this.inbox.conversations.unread.get(this.active)?.get(this.thread.chat)) this.readSoon(); });
 
@@ -58,7 +59,7 @@ class Workspace {
     return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, feedFilter:this.filter, feedKind:this.kind, archivedCount:this.inbox.conversations.archivedCount(this.feedScope), calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
       const s = this.sessions.get(a.id);
       const phone = s?.status === 'online' && /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(s.identity || '');
-      return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError, historySync: s?.historySync || null };
+      return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError, restriction:accountHealth.effectiveRestriction(a,s), accountHealth:accountHealth.classification(a,s), historySync: s?.historySync || null };
     }), ...this.threadPage(feed, deliver), more: this.thread ? this.thread.more : this.sources().some(s => s.more) };
   }
   publish() {
@@ -133,7 +134,7 @@ class Workspace {
     const link = batch.status === 'pair' ? batch.link || null : null;
     const linkChanged = s.link?.code !== link?.code || s.link?.state !== link?.state;
     const changed = linkChanged || !!batch.chatUnread || s.unread !== (batch.unread || 0) || s.qr !== (batch.qr || '') || s.status !== batch.status || s.more !== !!batch.more || s.historyError !== !!batch.historyError;
-    if ((batch.status === 'pair' && s.status !== 'pair') || (batch.identity && s.identity && s.identity !== batch.identity)) {
+    if (batch.identity && s.identity && s.identity !== batch.identity) {
       this.inbox.clear(id);
       this.people.delete(id);
       if (this.active === id && this.thread) this.select(this.feedScope);
@@ -151,6 +152,7 @@ class Workspace {
     s.historyError = !!batch.historyError;
     const sync = batch.status === 'online' && batch.historySync ? {progress:Number.isFinite(batch.historySync.progress) ? batch.historySync.progress : null, paused:batch.historySync.paused === true} : null;
     if (JSON.stringify(sync) !== JSON.stringify(s.historySync || null)) { s.historySync = sync; receiptLate = true; }
+    if (accountHealth.observe(this.accounts,s,batch)) receiptLate = true;
     if (this.trackLink(s, batch)) receiptLate = true;
     if (batch.status !== 'online' && s.activeCall) { s.activeCall = null; receiptLate = true; }
     if (batch.call !== undefined && batch.status === 'online') {
@@ -213,7 +215,7 @@ class Workspace {
       return true;
     }
     this.accounts.update(account.id,{dropped:{at:Date.now(),reason}});
-    const text = account.name + (account.phone ? '（+' + account.phone + '）' : '') + '已退出登录，可能被 WhatsApp 限制或在手机上移除了此设备。';
+    const text = account.name + (account.phone ? '（+' + account.phone + '）' : '') + '的网页关联已断开，请打开账号状态查看。';
     if (!this.win.isDestroyed()) this.win.webContents.send('desk:warning', text);
     if (Notification.isSupported()) new Notification({title:'WhatsApp 账号异常退出', body:text}).show();
     return true;
@@ -289,6 +291,7 @@ class Workspace {
     this.thread.more = Boolean(indexed || msg.existing);
     this.publish();
     if (!this.thread.more) return;
+    if (this.sessions.get(accountId).status !== 'online') { this.thread.more=false; this.publish(); return; }
     const epoch = this.epoch;
     await this.readThread();
     if (this.epoch !== epoch) return;
@@ -551,6 +554,16 @@ class Workspace {
     if (person) person.title = title;
     if (this.active === accountId && this.thread?.chat === chat) this.thread.title = title;
     this.publish();
+  }
+  // Asks WhatsApp to review a group it suspended; only a group admin may.
+  async requestReview(accountId, chat) {
+    const session = this.online(accountId);
+    if (typeof chat !== 'string' || !chat.endsWith('@g.us') || !this.inbox.conversations.find(accountId,chat)) throw new Error('会话不存在');
+    const result = await session.call('requestReview', chat);
+    const flags = this.inbox.conversations.flags.get(accountId)?.get(chat);
+    if (flags) flags.state = 'review';
+    this.publish();
+    return {state:'review', at:Number(result?.at) || Date.now()};
   }
   // Works for any conversation in the list, not only the one that is open.
   async chatSetting(accountId, chat, key, value) {

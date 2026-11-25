@@ -70,6 +70,7 @@ else app.whenReady().then(async () => {
   });
   const routes = {
     ...require('./backup/routes.cjs').backupRoutes(desk,app.getPath('userData')),
+    ...require('./account-health/routes.cjs').healthRoutes(desk),
     ...require('./group-routes.cjs').groupRoutes(desk),
     ...translationRoutes(app.getPath('userData'),require('electron').safeStorage,require('electron').net.fetch.bind(require('electron').net)),
     state: () => desk.snapshot(),
@@ -107,7 +108,7 @@ else app.whenReady().then(async () => {
     createGroup: (id, name, phones) => desk.createGroup(id, name, phones),
     micAccess: () => require('./permissions.cjs').mediaAccess(win,'microphone'),
     contactInfo: (id, chat) => desk.contactInfo(id, chat), saveRemark: (id, chat, name) => desk.saveRemark(id, chat, name),
-    chatSetting: (id, chat, key, value) => desk.chatSetting(id, chat, key, value),
+    chatSetting: (id, chat, key, value) => desk.chatSetting(id, chat, key, value), requestReview: (id, chat) => desk.requestReview(id, chat),
     pair: (id,phone) => {
       if (id !== desk.active || !desk.sessions.has(id)) throw new Error('请先选择要关联的账号');
       return desk.sessions.get(id).pair(phone);

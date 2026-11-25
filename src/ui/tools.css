@@ -52,3 +52,5 @@ body.unlinked .work { position:relative; grid-template-columns:0 minmax(0,1fr); 
 body.unlinked .feed { border-right:0; overflow:visible; }
 body.unlinked .feed > :not(.identity), body.unlinked .identity > :not(#dock-profile) { display:none; }
 body.unlinked .identity { position:absolute; left:calc(8px - var(--rail)); bottom:8px; width:calc(var(--rail) - 16px); margin:0; padding:8px 0; justify-content:center; }
+
+.health-row.limit { border-left-color:#e0a03c; } .health-row.limit small { color:#ffdcb0; } .health-title.limit { color:#f0b860; }

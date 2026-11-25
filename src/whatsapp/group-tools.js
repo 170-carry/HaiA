@@ -21,6 +21,12 @@ window.relayGroupTools = (() => {
     if (ok === false) throw new Error('WhatsApp 未接受这次更改');
     return true;
   }
-  return {list,info,save};
+  // The link people can join the group with. Resetting it makes the old link and QR code stop working.
+  async function invite(id, reset) {
+    const code = reset ? await WPP.group.revokeInviteCode(id) : await WPP.group.getInviteCode(id);
+    if (typeof code !== 'string' || !/^[\w-]{10,64}$/.test(code)) throw new Error('WhatsApp 没有返回邀请链接，可能只有管理员可以获取');
+    return {link:'https://chat.whatsapp.com/' + code};
+  }
+  return {list,info,save,invite};
 })();
 

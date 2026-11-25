@@ -56,7 +56,7 @@ function renderFeed(state, open) {
       from.append(avatarPhotos.face(owner.id,'self'));
       face.append(from);
     }
-    const stateLabel = {suspended:'已停用',left:'已退出',announce:'禁言',blocked:'已屏蔽'}[m.state];
+    const stateLabel = {suspended:'已停用',review:'审核中',left:'已退出',announce:'禁言',blocked:'已屏蔽'}[m.state];
     if (stateLabel) top.firstChild.after(el('span','row-state',stateLabel));
     // The same menu as a right-click, for people who do not think to right-click.
     const more = el('span','row-more');

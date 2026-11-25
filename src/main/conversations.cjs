@@ -10,7 +10,7 @@ class Conversations {
     for (const row of entries) if (typeof row.chat === 'string' && typeof row.title === 'string') {
       if (typeof row.pinned === 'boolean') {
         for (const key of ['pinned','archived','muted']) this.setFlag(accountId,row.chat,key,row[key]);
-        this.flags.get(accountId).get(row.chat).state = ['suspended','left','announce','blocked'].includes(row.state) ? row.state : '';
+        this.flags.get(accountId).get(row.chat).state = ['suspended','review','left','announce','blocked'].includes(row.state) ? row.state : '';
       }
       // The directory carries the current name, so a contact renamed elsewhere is picked up here.
       const latest = this.latest.get(accountId)?.get(row.chat);
