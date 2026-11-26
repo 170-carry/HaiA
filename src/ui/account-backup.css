@@ -2,22 +2,55 @@
 #open-backup { position:absolute; left:0; bottom:166px; width:100%; display:grid; place-items:center; color:var(--muted); }
 #open-backup > i { display:grid; place-items:center; width:40px; height:40px; border-radius:12px; background:var(--soft); }
 #open-backup:hover > i, #open-backup:focus-visible > i { background:var(--active); color:var(--ink); }
-#backup-dialog { width:min(500px,93vw); max-height:85vh; overflow:auto; }
-.backup-field { display:grid; gap:5px; margin-block:12px; color:var(--muted); font-size:13px; }
+#backup-dialog { width:min(520px,93vw); max-height:88vh; overflow:auto; }
+#backup-dialog .people-head { margin-bottom:6px; }
+.backup-lead { margin:0 0 14px; color:var(--muted); font-size:13px; line-height:1.6; }
+.backup-tabs { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; border-radius:10px; background:var(--control); margin-bottom:14px; }
+.backup-tabs button { padding:8px; border-radius:7px; color:var(--muted); font-weight:600; font-size:13px; }
+.backup-tabs button[aria-selected=true] { background:var(--active); color:var(--ink); }
+.backup-field { display:grid; gap:6px; margin-block:14px 8px; color:var(--muted); font-size:13px; }
 .backup-field :is(select,input) { width:100%; }
-.backup-actions { display:flex; justify-content:flex-end; gap:8px; }
-#backup-status { margin-top:10px; color:var(--muted); font-size:13px; }
-#backup-library { margin-top:18px; border-top:1px solid var(--line); padding-top:12px; }
+.backup-actions { display:flex; margin-top:14px; }
+.backup-actions .primary { flex:1; background:var(--accent); color:white; padding:11px 14px; border-radius:9px; font-weight:700; font-size:14px; }
+.backup-actions .primary:disabled { opacity:.45; cursor:default; }
+.backup-actions .primary:not(:disabled):hover { filter:brightness(1.1); }
+#backup-status { margin-top:10px; color:#bfe3cf; font-size:13px; line-height:1.6; min-height:1px; }
+#backup-status:empty { display:none; }
+#backup-note { font-size:12px; line-height:1.6; margin:0; }
+.backup-card { border:1px solid #7a5a3c; background:#3a3028; color:#ffdcb8; border-radius:10px; padding:12px 14px; font-size:13px; line-height:1.6; }
+.backup-card ul { margin:6px 0 0; padding-left:18px; }
+#backup-old { margin-top:18px; border-top:1px solid var(--line); padding-top:12px; color:var(--muted); font-size:13px; }
+#backup-old summary { cursor:pointer; }
 #backup-log { max-height:30vh; overflow:auto; overflow-wrap:anywhere; }
 .backup-row { margin:8px 0; padding:8px 10px; background:var(--soft); border-radius:8px; }
 .backup-row small { color:var(--muted); } .backup-row p { white-space:pre-wrap; margin:4px 0; }
-#backup-owners { border:1px solid var(--line); border-radius:8px; padding:8px 12px; min-width:0; }
-#backup-owners legend { font-size:13px; color:var(--muted); padding:0 4px; }
-#backup-choices { max-height:150px; overflow:auto; }
-#backup-owners label { display:flex; align-items:center; gap:9px; padding:5px 0; cursor:pointer; }
-#backup-owners input { width:16px; height:16px; flex:none; }
-#backup-owners .backup-toggle { border-bottom:1px solid var(--line); }
-#backup-owners input[type=checkbox] { appearance:none; display:grid; place-items:center; margin:0; padding:0; border:1px solid var(--control-edge); border-radius:4px; background:var(--control); }
+#backup-owners { border:0; padding:0; margin:0; min-width:0; }
+#backup-owners legend { font-size:13px; color:var(--muted); padding:0; margin-bottom:6px; float:left; }
+#backup-owners .backup-toggle { float:right; display:flex; align-items:center; gap:7px; font-size:13px; color:var(--muted); cursor:pointer; margin-bottom:6px; }
+#backup-choices { clear:both; max-height:232px; overflow:auto; display:grid; gap:6px; }
+.backup-account { display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:10px; background:var(--soft); cursor:pointer; border:1px solid transparent; }
+.backup-account:has(input:checked) { border-color:var(--accent); background:#3a3d5c; }
+.backup-account.off { opacity:.5; cursor:default; }
+.backup-account .avatar { width:34px; height:34px; border-radius:10px; flex:none; }
+.backup-words { min-width:0; display:grid; } .backup-words strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .backup-words small { color:var(--muted); }
+#backup-owners input { width:18px; height:18px; flex:none; }
+#backup-owners input[type=checkbox] { appearance:none; display:grid; place-items:center; margin:0; padding:0; border:1px solid var(--control-edge); border-radius:5px; background:var(--control); }
 #backup-owners input:is(:checked,:indeterminate) { background:var(--accent); border-color:var(--accent); }
-#backup-owners input:checked::after { content:""; width:7px; height:4px; border:solid white; border-width:0 0 2px 2px; transform:translateY(-1px) rotate(-45deg); }
+#backup-owners input:checked::after { content:""; width:8px; height:4px; border:solid white; border-width:0 0 2px 2px; transform:translateY(-1px) rotate(-45deg); }
 #backup-owners input:indeterminate::after { content:""; width:8px; border-bottom:2px solid white; }
+#backup-status.bad { color:#ff9aa5; }
+#backup-dialog { padding:22px; width:min(460px,calc(100vw - 32px)); border:1px solid var(--line); border-radius:14px; }
+#backup-dialog .people-head h2 { margin:0; font-size:20px; }
+#backup-close { color:var(--muted); font-size:13px; }
+#backup-dialog .backup-lead { margin:8px 0 16px; font-size:13px; }
+#backup-owners legend { font-size:12px; text-transform:none; margin:0 0 8px; }
+#backup-choices { gap:4px; max-height:280px; }
+.backup-account { padding:10px; border-radius:8px; }
+.backup-account .avatar { width:32px; height:32px; border-radius:50%; }
+.backup-words { gap:3px; }
+.backup-words strong { font-size:14px; font-weight:600; }
+.backup-words small { font-size:12px; }
+#backup-note { margin-top:12px; }
+#backup-dialog .backup-actions .primary { min-height:42px; border-radius:8px; font-size:14px; }
+#backup-status { margin:12px 0 0; }
+#backup-close { font-size:0; width:28px; height:28px; display:grid; place-items:center; padding:0; border:0; background:transparent; }

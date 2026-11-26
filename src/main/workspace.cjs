@@ -125,7 +125,8 @@ class Workspace {
     const session = this.online(accountId), query = String(term ?? '').trim();
     if (!query) return this.inbox.conversations.page(60,accountId).messages.filter(m => !m.chat.endsWith('@g.us')).map(m => ({chat:m.chat,title:m.title,phone:m.phone || ''}));
     if (query.length > 100) return [];
-    const rows = await session.call('searchPeople', query);
+    const found = await session.call('searchPeople', query);
+    const rows = Array.isArray(found)?found:found.rows;
     return (Array.isArray(rows) ? rows : []).slice(0,60).map(row => ({chat:String(row.chat),title:String(row.title || ''),phone:String(row.phone || '')}));
   }
   receive(s, batch) {
@@ -271,13 +272,17 @@ class Workspace {
     if (typeof term !== 'string' || !term.trim() || term.length > 100) return {rows:[],failed:0};
     const results = await Promise.allSettled(this.feedSources().filter(s => s.status === 'online').map(async s => {
       const identity = s.identity;
-      const rows = await s.call('searchPeople',term);
-      if (s.disposed || identity !== s.identity || s.status !== 'online') return [];
+      const result = await s.call('searchPeople',term);
+      const rows = Array.isArray(result)?result:result.rows;
+      if (s.disposed || identity !== s.identity || s.status !== 'online') return {rows:[],incomplete:true};
       if (!this.people.has(s.account.id)) this.people.set(s.account.id,new Map());
       for (const row of rows) this.people.get(s.account.id).set(row.chat,row);
-      return rows.map(row=>({...row,accountId:s.account.id,accountName:s.account.name}));
+      return {rows:rows.map(row=>({...row,accountId:s.account.id,accountName:s.account.name})),incomplete:!!result.incomplete,lookup:result.lookup};
     }));
-    return {rows:results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value), failed:results.filter(r=>r.status==='rejected').length};
+    return {rows:results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value.rows),
+      failed:results.filter(r=>r.status==='rejected' || r.value.incomplete).length,
+      notFound:results.some(r=>r.status==='fulfilled' && r.value.lookup==='not-found'),
+      pinRequired:results.some(r=>r.status==='fulfilled' && r.value.lookup==='key-required')};
   }
   async openChat(accountId, chat) {
     const indexed = this.inbox.conversations.find(accountId,chat);

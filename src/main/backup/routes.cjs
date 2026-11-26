@@ -1,12 +1,14 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const {exportSelection,readSelection,restoreSelection}=require('./collection.cjs');
+const {readSelection,restoreSelection}=require('./collection.cjs');
 const {dialog} = require('electron');
-const media = require('../media.cjs');
-const {uuid,password,unpack,readJson} = require('./package.cjs');
-const {capture,assetFile,chatId} = require('./records.cjs');
+const {uuid,unpack,readJson} = require('./package.cjs');
+const {assetFile,chatId} = require('./records.cjs');
 
 const {historyPage,chatPages}=require('./chat-pages.cjs');
+const {exportLogins,importLogins,isLoginFile}=require('./login.cjs');
+
+const {version}=require('./login-archive.cjs');
 
 function backupRoutes(desk,dir) {
   const root=path.join(dir,'account-backups'), win=desk.win, filters=[{name:'HaiA 账号备份',extensions:['haia']}];
@@ -27,7 +29,7 @@ function backupRoutes(desk,dir) {
     if(!summary) throw new Error('这份备份中没有该会话');
     return summary;
   }
-  let busy=false;
+  let busy=false,pendingFile=null;
   async function operation(action) {
     if(busy) throw new Error('另一个备份操作正在进行');
     busy=true; let temp;
@@ -54,23 +56,31 @@ function backupRoutes(desk,dir) {
         await fs.rm(path.join(root,id),{recursive:true,force:true});
       } finally { busy=false; }
     },
-    backupExport:(ids,pass,drafts={})=>operation(async(temp,staging)=>{
-      password(pass);
-      if(!Array.isArray(ids) || !ids.length || new Set(ids).size!==ids.length ||
+    // Only what keeps the account linked is exported; the other computer then shows the same conversations without re-linking.
+    backupExport:ids=>operation(async temp=>{
+      if(!Array.isArray(ids) || !ids.length || ids.length>50 || new Set(ids).size!==ids.length ||
          !ids.every(id=>uuid.test(id) && desk.sessions.has(id))) throw Error('请勾选要导出的账号');
       const label=ids.length===1?account(ids[0]).name:ids.length+'个账号';
       const choice=await dialog.showSaveDialog(win,{filters,defaultPath:'HaiA-'+label.replace(/[\\/:*?"<>|]/g,'_')+'.haia'});
       if(choice.canceled) return null;
-      return exportSelection(ids,{temp,staging,target:choice.filePath,pass,progress,capture:async(id,dir,notify)=>
-        capture(desk,desk.sessions.get(id),dir,drafts[id] || [],notify,media.download,(await versions(id))[0])});
+      return exportLogins(desk,dir,ids,choice.filePath,temp,progress);
     }),
     backupImport:pass=>operation(async(temp,staging)=>{
-      password(pass);
-      const choice=await dialog.showOpenDialog(win,{filters,properties:['openFile']});
-      if(choice.canceled) return null;
+      if(pass===undefined || !pendingFile){
+        const choice=await dialog.showOpenDialog(win,{filters,properties:['openFile']});
+        if(choice.canceled) {pendingFile=null;return null;}
+        pendingFile=choice.filePaths[0];
+      }
+      const kind=await version(pendingFile);
+      if(kind!==2 && !pass)return {needsPassword:true};
+      if(await isLoginFile(pendingFile)){
+        const result={login:await importLogins(desk,dir,pendingFile,pass,temp,progress)};
+        pendingFile=null;return result;
+      }
       progress('正在校验并恢复备份…');
-      await unpack(choice.filePaths[0],staging,path.join(temp,'payload.tar'),pass);
-      return restoreSelection(desk,root,await readSelection(temp,staging));
+      await unpack(pendingFile,staging,path.join(temp,'payload.tar'),pass);
+      const result=await restoreSelection(desk,root,await readSelection(temp,staging));
+      pendingFile=null;return result;
     }),
     backupList:async id=>(await versions(id)).map(({meta:m})=>({key:m.id,time:m.time,name:m.name,phone:m.phone,chats:m.chats,missing:m.missingAttachments,pending:m.missingBodies})),
     backupPage:async(id,key,chat,offset=0)=>{

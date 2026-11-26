@@ -6,7 +6,7 @@ const dir = process.argv[2], phase = process.argv[3];
 if (!dir || !['first','restart'].includes(phase)) throw new Error('需要临时测试目录和阶段');
 app.setPath('userData', dir);
 app.on('session-created', ses => {
-  if (ses !== session.defaultSession) ses.protocol.handle('https', () => new Response('<html><body>local fixture</body></html>',{ headers:{'Content-Type':'text/html'} }));
+  if (ses !== session.defaultSession && !ses.storagePath.includes('snapshot-')) ses.protocol.handle('https', () => new Response('<html><body>local fixture</body></html>',{ headers:{'Content-Type':'text/html'} }));
 });
 const realRead = fs.readFileSync, bundle = require.resolve('@wppconnect/wa-js');
 fs.readFileSync = function(file,...args) {
@@ -211,6 +211,15 @@ async function until(fn) {
     await shell.executeJavaScript("document.querySelector('.person-result').click()");
     await until(async ()=>(await call('state')).thread?.chat==='16505550123@c.us');
     assert.equal((await call('state')).active,accounts[0].id);
+    // A number that is on WhatsApp but has never been talked to is found and can be opened; an unregistered one says so.
+    await call('select',accounts[0].id);
+    await shell.executeJavaScript("{document.getElementById('find-person').click();const box=document.getElementById('people-query');box.value='+905455486898';box.dispatchEvent(new Event('input'))}");
+    await until(()=>shell.executeJavaScript("document.querySelectorAll('.person-result').length===1 && document.querySelector('.person-result small').textContent.includes('还没有聊过')"));
+    await shell.executeJavaScript("document.querySelector('.person-result').click()");
+    await until(async ()=>(await call('state')).thread?.chat==='905455486898@c.us');
+    await shell.executeJavaScript("{document.getElementById('find-person').click();const box=document.getElementById('people-query');box.value='+905455480000';box.dispatchEvent(new Event('input'))}");
+    await until(()=>shell.executeJavaScript("document.getElementById('people-status').textContent.includes('WhatsApp 未找到该号码')"));
+    await shell.executeJavaScript("document.getElementById('people-close').click()");
     await call('select',accounts[0].id);
     await a.executeJavaScript(`(() => {
       const group={id:'fixture@g.us',formattedTitle:'交接小组',t:now,groupMetadata:{subject:'交接小组',desc:'值班交接',canSetSubject:()=>true,canSetDescription:()=>false}};
@@ -286,7 +295,8 @@ async function until(fn) {
     assert.deepEqual(await ui("[...get('bubbles').querySelectorAll('.message-text')].filter(n=>n.textContent.startsWith('恢复的')).map(n=>n.textContent)"),['恢复的第一条','恢复的第二条']);
     const G='fixture@g.us', me=accounts[0].id, pixel='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     await call('sendFile',me,G,{name:'样品.png',data:pixel,caption:'样品照片'});
-    await until(()=>ui("(()=>{const img=document.querySelector('.media-picture img');return !!img && img.naturalWidth===1 && !img.classList.contains('preview');})()"));
+    try { await until(()=>ui("(()=>{const img=document.querySelector('.media-picture img');return !!img && img.naturalWidth===1 && !img.classList.contains('preview');})()")); }
+    catch(error){throw Error(error.message+' '+await ui("JSON.stringify({image:document.querySelector('.media-picture')?.outerHTML,warning:get('warning').textContent})"));}
     const photo=(await call('state')).messages.find(m=>m.media?.kind==='image');
     assert.equal(photo.text,'样品照片');
     assert.equal(await ui("[...document.querySelectorAll('.message')].find(n=>n.querySelector('.media-picture')).querySelector('.message-text').hidden"),false);

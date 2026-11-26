@@ -54,7 +54,7 @@ window.WPP = {
     return canvas.toDataURL();
   },list:async()=>[{id:'16505550123@c.us',name:'目录联系人'}],subscribePresence:async id=>{window.watched=id;return [];},
     get:async id=>({pushname:'Jiamin',isBusiness:true,isMyContact:!!chats.get(id)?.saved,name:chats.get(id)?.saved,phoneNumber:{_serialized:'6581234567@c.us'}}),
-    getStatus:async()=>'工作日 9:00–18:00 在线',getCommonGroups:async()=>['fixture@g.us'],
+    getStatus:async()=>'工作日 9:00–18:00 在线',queryExists:async id=>id==='905455486898@c.us' ? {wid:{_serialized:id}} : null,getCommonGroups:async()=>['fixture@g.us'],
     getBusinessProfile:async()=>({description:'精密五金配件采购',categories:[{localized_display_name:'批发'}],email:'buyer@example.test',website:['https://example.test']}),
     save:async(id,name)=>{const c=chats.get(id);c.saved=name;c.formattedTitle=name;},remove:async id=>{const c=chats.get(id);delete c.saved;c.formattedTitle='+65 8123 4567';}},
   profile:{isBusiness:()=>localStorage.owner==='one',getMyProfileName:()=>window.myName || '销售小张',setMyProfileName:async name=>{window.myName=name;return true;},

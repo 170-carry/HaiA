@@ -1,3 +1,4 @@
+if (require('./backup/snapshot-worker.cjs').runSnapshotWorker()) return;
 const { app, BrowserWindow, ipcMain, Menu, dialog, systemPreferences, protocol, Tray, nativeImage } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');

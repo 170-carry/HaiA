@@ -50,15 +50,16 @@
 <dialog id="special-dialog" aria-labelledby="special-title"><form id="special-form" novalidate><h2 id="special-title"></h2><p id="special-hint"></p><div id="special-fields"></div><div id="special-error" role="alert"></div><footer><button type="button" id="special-cancel">取消</button><button class="primary">发送</button></footer></form></dialog>
 <dialog id="status-dialog" aria-labelledby="status-title"><div class="people-head"><h2 id="status-title">动态</h2><button id="status-close" aria-label="关闭">关闭</button></div><label for="status-owner">账号</label><select id="status-owner"></select><form id="status-form" novalidate><textarea id="status-text" maxlength="700" placeholder="发布一条文字动态，或选择图片后填写说明" aria-label="动态内容"></textarea><div class="status-compose"><button type="button" id="status-image">选择图片</button><span id="status-image-name"></span><input id="status-image-input" type="file" accept="image/jpeg,image/png,image/webp" hidden><button class="primary">发布动态</button></div></form><p id="status-note" role="status"></p><div id="status-list"></div></dialog>
 <dialog id="backup-dialog" aria-labelledby="backup-title">
-<div class="people-head"><h2 id="backup-title">账号导入 / 导出</h2><button id="backup-close" aria-label="关闭"><i data-icon="close"></i></button></div>
-<fieldset id="backup-owners"><legend>导出账号</legend><label class="backup-toggle"><input type="checkbox" id="backup-all">全选</label><div id="backup-choices"></div></fieldset>
-<label class="backup-field">备份密码<input type="password" id="backup-pass" minlength="8" maxlength="256" autocomplete="off" placeholder="至少 8 个字符"></label>
-<p class="detail-note">备份包含此设备可读取的会话、消息、草稿和可下载的附件。导入后可在下方查看记录。新设备收发消息时，需用手机重新关联。</p>
-<div class="backup-actions"><button class="plain" id="backup-import">从文件导入</button><button class="primary" id="backup-export">导出所选账号</button></div>
+<div class="people-head"><h2 id="backup-title">账号迁移</h2><button id="backup-close" aria-label="关闭">关闭</button></div>
+<div class="backup-tabs" role="tablist"><button role="tab" id="backup-tab-export" aria-selected="true">导出到文件</button><button role="tab" id="backup-tab-import" aria-selected="false">从文件导入</button></div>
+<fieldset id="backup-owners"><legend>选择要导出的账号</legend><label class="backup-toggle"><input type="checkbox" id="backup-all"><span>全选</span></label><div id="backup-choices"></div></fieldset>
+<label class="backup-field" id="backup-password-field" hidden><span id="backup-pass-label">旧文件密码</span><input type="password" id="backup-pass" minlength="8" maxlength="256" autocomplete="off" placeholder="输入旧文件的密码"></label>
+<div class="backup-actions"><button class="primary" id="backup-export">导出所选账号</button><button class="primary" id="backup-import" hidden>选择文件并导入</button></div>
 <p id="backup-status" role="status"></p>
-<label class="backup-field">查看已导入记录的账号<select id="backup-account"></select></label>
-<section id="backup-library" hidden><h3>已导入的聊天记录</h3><label class="backup-field">备份<select id="backup-version"></select></label><label class="backup-field">会话<select id="backup-chat"></select></label>
-<div id="backup-log"></div><button class="plain" id="backup-older" hidden>查看更早的 100 条</button></section>
+<details id="backup-old" hidden><summary>以前导入的聊天记录</summary>
+<label class="backup-field">账号<select id="backup-account"></select></label>
+<section id="backup-library" hidden><label class="backup-field">备份<select id="backup-version"></select></label><label class="backup-field">会话<select id="backup-chat"></select></label>
+<div id="backup-log"></div><button class="plain" id="backup-older" hidden>查看更早的 100 条</button></section></details>
 </dialog>
 <dialog id="settings-dialog" aria-labelledby="settings-title"><div class="people-head"><h2 id="settings-title">设置</h2><button id="settings-close" aria-label="关闭">关闭</button></div>
 <section class="settings-group"><h3>发送消息</h3><label class="settings-choice"><input type="radio" name="send-key" value="enter"><span>Enter 发送，Shift + Enter 换行</span></label><label class="settings-choice"><input type="radio" name="send-key" value="mod"><span id="settings-mod-label"></span></label></section>

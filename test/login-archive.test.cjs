@@ -1,0 +1,32 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
+const {version,writeArchive,readArchive}=require('../src/main/backup/login-archive.cjs');
+test('password-free login archives round trip and reject corrupted files before extracting',async t=>{
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'haia-login-archive-'));
+ t.after(()=>fs.rm(root,{recursive:true,force:true}));
+ const from=path.join(root,'from'),to=path.join(root,'to'),file=path.join(root,'test.haia');
+ await fs.mkdir(from);await fs.writeFile(path.join(from,'manifest.json'),'{"format":"login-2","accounts":[]}');
+ await writeArchive(from,file);assert.equal(await version(file),2);
+ assert.equal((await readArchive(file,to,root)).format,'login-2');
+ const bytes=await fs.readFile(file);bytes[bytes.length-1]^=1;await fs.writeFile(file,bytes);
+ await assert.rejects(readArchive(file,path.join(root,'bad'),root),/损坏/);
+ await assert.rejects(fs.stat(path.join(root,'bad')),/ENOENT/);
+});
+test('legacy encrypted login archives still require their original password',async t=>{
+ const crypto=require('node:crypto'),{promisify}=require('node:util'),{pipeline}=require('node:stream/promises'),tar=require('tar');
+ const nativeFs=require('node:fs');
+ const root=await fs.mkdtemp(path.join(os.tmpdir(),'haia-legacy-login-'));
+ t.after(()=>fs.rm(root,{recursive:true,force:true}));
+ const source=path.join(root,'source');await fs.mkdir(source);
+ await fs.writeFile(path.join(source,'manifest.json'),'{"format":"login-1","accounts":[]}');
+ const file=path.join(root,'old.haia'),head=Buffer.concat([Buffer.from('HaiA-login-v1\n'),crypto.randomBytes(16),crypto.randomBytes(12)]);
+ const key=await promisify(crypto.scrypt)('legacy password',head.subarray(14,30),32,{N:32768,maxmem:64*1024*1024});
+ const cipher=crypto.createCipheriv('aes-256-gcm',key,head.subarray(-12));cipher.setAAD(head);
+ await fs.writeFile(file,head);
+ await pipeline(tar.c({cwd:source,gzip:true},['manifest.json']),cipher,nativeFs.createWriteStream(file,{flags:'a'}));
+ await fs.appendFile(file,cipher.getAuthTag());
+ assert.equal(await version(file),1);
+ await fs.mkdir(path.join(root,'work1'));await fs.mkdir(path.join(root,'work2'));
+ await assert.rejects(readArchive(file,path.join(root,'bad'),path.join(root,'work1'),'wrong password'),/密码不正确/);
+ assert.equal((await readArchive(file,path.join(root,'good'),path.join(root,'work2'),'legacy password')).format,'login-1');
+});

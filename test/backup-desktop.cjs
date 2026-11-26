@@ -9,7 +9,7 @@ const profile=path.join(dir,phase==='export'?'source':'destination'), file=path.
 fs.mkdirSync(profile,{recursive:true});
 app.setPath('userData',profile);
 app.on('session-created',s=>{
-  if(s!==session.defaultSession) s.protocol.handle('https',()=>new Response('<html>fixture</html>',{headers:{'Content-Type':'text/html'}}));
+  if(s!==session.defaultSession && !s.storagePath.includes('snapshot-')) s.protocol.handle('https',()=>new Response('<html>fixture</html>',{headers:{'Content-Type':'text/html'}}));
 });
 const read=fs.readFileSync, bundle=require.resolve('@wppconnect/wa-js');
 fs.readFileSync=function(f,...args){return read.call(fs,f===bundle?path.join(__dirname,'mock-provider.js'):f,...args)};
@@ -47,19 +47,28 @@ async function until(fn) {
   await click('open-backup');
   assert.equal(await ui("get('open-backup').getBoundingClientRect().bottom <= get('open-settings').getBoundingClientRect().top"),true);
   if(phase==='export') {
-    if(multi){
-      await click('backup-all');
-      await ui("get('backup-choices').querySelectorAll('input')[2].click()");
-      assert.equal(await ui("get('backup-all').indeterminate && get('backup-choices').querySelectorAll(':checked').length===2"),true);
-    }
-    await pass(); await click('backup-export');
-    await until(()=>ui("get('backup-status').textContent.includes('"+(multi?'2':'1')+" 条消息')"));
+    const {exportSelection}=require('../src/main/backup/collection.cjs');
+    const {writeJson}=require('../src/main/backup/package.cjs');
+    const {writeChat}=require('../src/main/backup/chat-pages.cjs');
+    const {randomUUID}=require('node:crypto');
+    const temp=fs.mkdtempSync(path.join(dir,'legacy-')),staging=path.join(temp,'records');fs.mkdirSync(staging);
+    const accounts=await ui('state.accounts');
+    const ids=accounts.slice(0,multi?2:1).map(a=>a.id);
+    await exportSelection(ids,{temp,staging,target:file,pass:'isolated fixture password',progress:()=>{},capture:async(id,folder)=>{
+      const account=accounts.find(a=>a.id===id),text=id===ids[0]?'fixture message':'second inbox';
+      const m={format:1,id:randomUUID(),source:id,name:account.name,phone:account.phone || '',time:Date.now(),chats:[{chat:'demo@c.us',title:'fixture',count:1}],drafts:[],missingAttachments:0,missingBodies:0,online:true};
+      await writeChat(folder,'demo@c.us',[{chat:'demo@c.us',id:'fixture',text,time:Date.now()}]);
+      await writeJson(folder,'manifest.json',m);return m;
+    }});
   }
   if(phase!=='restart') {
+    await click('backup-tab-import'); await click('backup-import');
+    await until(()=>ui("!get('backup-password-field').hidden"));
     await pass(); await click('backup-import');
-    await until(()=>ui("get('backup-log').textContent.includes('fixture message')"));
+    try {await until(()=>ui("get('backup-log').textContent.includes('fixture message')"));}
+    catch(error){throw Error(error.message+' '+await ui("JSON.stringify({status:get('backup-status').textContent,log:get('backup-log').textContent,account:get('backup-account').value})"));}
     await pass(); await click('backup-import');
-    await until(()=>ui("get('backup-status').textContent.includes('已导入，可以查看')"));
+    await until(()=>ui("get('backup-status').textContent==='导入完成'"));
     assert.equal(await ui("state.accounts.length"),multi?(phase==='export'?3:2):1);
     if(multi){
       await ui("get('backup-account').value=state.accounts[1].id;get('backup-account').dispatchEvent(new Event('change'))");
@@ -68,7 +77,8 @@ async function until(fn) {
     if(phase==='export') assert.equal(await ui("state.accounts[0].status"),'online');
     else await until(()=>ui("state.accounts[0].status==='pair'"));
   } else {
-    await until(()=>ui("get('backup-log').textContent.includes('fixture message')"));
+    try {await until(()=>ui("get('backup-log').textContent.includes('fixture message')"));}
+    catch(error){throw Error(error.message+' '+await ui("JSON.stringify({status:get('backup-status').textContent,log:get('backup-log').textContent,account:get('backup-account').value})"));}
     assert.equal(await ui("get('backup-version').options.length"),1);
     await click('backup-close');
     await ui("api.remove(state.accounts[0].id)");
