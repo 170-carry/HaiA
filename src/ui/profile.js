@@ -18,6 +18,10 @@ const profilePanel = (() => {
     sync();
   };
   wide.addEventListener('change', () => { compactOpen = false; sync(); });
+  // The rarely needed details stay folded, and stay the way they were left.
+  const more = node('profile-more');
+  more.open = localStorage.getItem('profile-more') === 'true';
+  more.ontoggle = () => localStorage.setItem('profile-more', String(more.open));
   node('profile-reply').onclick = () => {
     compactOpen = false; sync(); node('reply').focus();
   };

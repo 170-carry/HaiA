@@ -1,6 +1,6 @@
 // Contact info as WhatsApp shows it, with the remark and chat switches editable in place.
 const contactDetails = (() => {
-  const box = get('profile-details'), dialog = get('remark-dialog');
+  const box = get('profile-details'), extra = get('profile-extra'), danger = get('profile-danger'), dialog = get('remark-dialog');
   let key = null, target = null, info = null, failed = false, labels = null;
   const current = () => target && state?.active === target.account && state.thread?.chat === target.chat;
   async function load() {
@@ -119,8 +119,9 @@ const contactDetails = (() => {
     get('profile-kind').textContent = group ? 'WhatsApp 群聊' + (info?.members ? ' · ' + info.members + ' 位成员' : '') :
       [info?.phone,info?.business ? '商业账号' : ''].filter(Boolean).join(' · ') || 'WhatsApp 会话';
     if (!info) limit();
-    if (!info) { box.replaceChildren(el('p','detail-note',failed ? '暂时无法读取资料，请稍后重试。' : '正在读取资料…')); return; }
-    const rows = [];
+    if (!info) { extra.replaceChildren(); danger.replaceChildren(); box.replaceChildren(el('p','detail-note',failed ? '暂时无法读取资料，请稍后重试。' : '正在读取资料…')); return; }
+    // What people act on stays in view; what they look up now and then goes under "更多资料".
+    const rows = [], more = [];
     limit();
     if (group) {
       const states = info.limits ? [[info.limits.suspended,'已被 WhatsApp 停用'],[info.limits.suspended && info.limits.review === 'review','WhatsApp 正在审核'],
@@ -144,17 +145,17 @@ const contactDetails = (() => {
         rows.push(quick);
       }
       if (info.description) rows.push(field('群描述',info.description));
-      if (info.created) rows.push(field('创建时间',new Date(info.created).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'})));
+      if (info.created) more.push(field('创建时间',new Date(info.created).toLocaleDateString('zh-CN',{year:'numeric',month:'long',day:'numeric'})));
     } else {
       const edit = el('button','detail-action',named ? '修改' : '添加');
       edit.type = 'button'; edit.onclick = open;
       rows.push(field('备注',info.remark || '未设置',edit));
-      if (info.nickname && info.nickname !== info.remark) rows.push(field('WhatsApp 昵称','~' + info.nickname));
-      if (info.verified) rows.push(field('认证名称',info.verified));
-      if (info.about) rows.push(field('个性签名',info.about));
+      if (info.nickname && info.nickname !== info.remark) more.push(field('WhatsApp 昵称','~' + info.nickname));
+      if (info.verified) more.push(field('认证名称',info.verified));
+      if (info.about) more.push(field('个性签名',info.about));
       if (info.business) {
         for (const [label,value] of [['商家简介',info.business.description],['行业',info.business.category],['地址',info.business.address],
-          ['邮箱',info.business.email],['网站',info.business.websites.join('\n')]]) if (value) rows.push(field(label,value));
+          ['邮箱',info.business.email],['网站',info.business.websites.join('\n')]]) if (value) more.push(field(label,value));
       }
       if (info.groups.length) {
         const list = el('div','detail');
@@ -164,7 +165,7 @@ const contactDetails = (() => {
           link.type = 'button'; link.onclick = () => run(()=>api.openChat(target.account,item.chat));
           list.append(link);
         }
-        rows.push(list);
+        more.push(list);
       }
     }
     {
@@ -183,12 +184,13 @@ const contactDetails = (() => {
         }); };
         row.append(select);
       } else row.append(el('span','detail-value',(options.find(([value]) => value === info.ephemeral)?.[1] || Math.round(info.ephemeral/86400)+' 天')));
-      rows.push(row);
+      more.push(row);
     }
     const switches = el('div','switches');
     switches.append(toggle('bell','静音通知','muted'),toggle('pin','置顶聊天','pinned'),toggle('archive','归档聊天','archived'));
-    if (!group) switches.append(toggle('block','屏蔽联系人','blocked',true));
-    box.replaceChildren(...rows,...(labels ? [labelBox()] : []),switches);
+    box.replaceChildren(switches,...rows,...(labels ? [labelBox()] : []));
+    extra.replaceChildren(...more);
+    danger.replaceChildren(...(group ? [] : [toggle('block','屏蔽联系人','blocked',true)]));
   }
   function open() {
     if (!info || !current()) return;
@@ -218,5 +220,5 @@ const contactDetails = (() => {
     if (!same) info = labels = null;
     draw();
     if (!failed) void load();
-  }, hide() { if (dialog.open) dialog.close(); key = target = info = null; limit(); get('remark-edit').hidden = get('reader-phone').hidden = true; }};
+  }, hide() { if (dialog.open) dialog.close(); key = target = info = null; extra.replaceChildren(); danger.replaceChildren(); limit(); get('remark-edit').hidden = get('reader-phone').hidden = true; }};
 })();

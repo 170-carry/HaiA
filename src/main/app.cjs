@@ -26,7 +26,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 else app.whenReady().then(async () => {
   const index = path.join(__dirname, '../ui/index.html');
   const accounts = new Accounts(app.getPath('userData'));
-  const titleBarColors = {color:'#2b2c31', symbolColor:'#f2f3f5'};
+  const titleBarColors = {color:'#18181a', symbolColor:'#f2f2f7'};
   win = new BrowserWindow({ title: 'HaiA', width: 1260, height: 820, minWidth: 820, minHeight: 520,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     ...(process.platform === 'darwin' ? {trafficLightPosition: {x: 14, y: 10}} :

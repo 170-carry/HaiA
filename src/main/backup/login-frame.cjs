@@ -32,7 +32,7 @@ async function acceptSnapshot() {
   };
   port.start();
 }
-async function sendSnapshot(allowed) {
+async function sendSnapshot(allowed, filters = {}) {
   const databases=[];
   for(const item of await indexedDB.databases()){
     if(!Object.hasOwn(allowed,item.name))continue;
@@ -46,6 +46,11 @@ async function sendSnapshot(allowed) {
         if(allowed[item.name]===null || allowed[item.name].includes(name)){
           const ask=request=>new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
           [schema.keys,schema.values]=await Promise.all([ask(store.getAllKeys()),ask(store.getAll())]);
+          const keys=filters[item.name+'/'+name];
+          if(keys){
+            const positions=schema.keys.map((key,i)=>keys.includes(key)?i:-1).filter(i=>i>=0);
+            schema.keys=positions.map(i=>schema.keys[i]);schema.values=positions.map(i=>schema.values[i]);
+          }
         }
         stores.push(schema);
       }

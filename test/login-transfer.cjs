@@ -35,12 +35,17 @@ const take="new Promise((done,fail)=>{const open=indexedDB.open('wawc',1);open.o
     await ui("api.add('销售一号')");
     const id=await until(()=>ui('state.accounts[0]?.id'));
     const w=await page(id);
+    await w.session.cookies.set({url:'https://web.whatsapp.com/',name:'wa_web_access_token',value:'fixture-live-access-token',domain:'.web.whatsapp.com',secure:true,httpOnly:true,sameSite:'no_restriction'});
     await until(()=>w.executeJavaScript("typeof window.sample==='function' && typeof window.relayReader==='object'").catch(()=>false));
     await w.executeJavaScript("localStorage.owner='123456@c.us';sample('carried message','one');true");
     assert.equal(await w.executeJavaScript(put),true);
     await w.executeJavaScript(`(async()=>{
-      const write=async(name,store,value)=>{const db=await new Promise(resolve=>{const q=indexedDB.open(name,1);q.onupgradeneeded=()=>q.result.createObjectStore(store);q.onsuccess=()=>resolve(q.result)});await new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(value,'fixture');tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});db.close();};
+      const write=async(name,store,value,key='fixture')=>{const db=await new Promise(resolve=>{const q=indexedDB.open(name,1);q.onupgradeneeded=()=>{q.result.createObjectStore(store);if(name==='model-storage')q.result.createObjectStore('user-prefs')};q.onsuccess=()=>resolve(q.result)});await new Promise((resolve,reject)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(value,key);tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error)});db.close();};
       await write('model-storage','message','private history excluded from login export');
+      await write('model-storage','user-prefs','required-registration-key','WAADVSecretKey');
+      await write('model-storage','user-prefs',{initialCompleted:true,recentCompleted:true},'WAHistorySyncStatus');
+      await write('model-storage','user-prefs',true,'WAInitialHistorySynced');
+      await write('model-storage','user-prefs','private history progress excluded','WAHistorySyncTotalProcessedMessageCount');
       const key=await crypto.subtle.generateKey({name:'AES-GCM',length:128},false,['encrypt','decrypt']);
       await write('signal-storage','signal-meta-store',key);
     })()`);
@@ -63,6 +68,7 @@ const take="new Promise((done,fail)=>{const open=indexedDB.open('wawc',1);open.o
     assert.equal(fs.readFileSync(file).subarray(0,13).toString(),'HaiA-login-v2');
     const payload=require('node:zlib').gunzipSync(fs.readFileSync(file).subarray(Buffer.byteLength('HaiA-login-v2\n')+32));
     assert.equal(payload.includes(Buffer.from('private history excluded from login export')),false);
+    assert.equal(payload.includes(Buffer.from('private history progress excluded')),false);
     console.log('PASS: login export without message records, '+size+' bytes');
   } else {
     assert.equal(await ui('state.accounts.length'),0);
@@ -73,6 +79,11 @@ const take="new Promise((done,fail)=>{const open=indexedDB.open('wawc',1);open.o
     await until(()=>ui("get('backup-status').textContent==='导入完成'"));
     // Signed in without pairing, under the same name and number, with what the page had stored.
     await until(()=>ui("state.accounts.length===1 && state.accounts[0].status==='online' && state.accounts[0].name==='销售一号'"));
+    const importedId=await ui('state.accounts[0].id');
+    const cookies=await session.fromPartition('persist:wa-'+importedId).cookies.get({name:'wa_web_access_token'});
+    assert.equal(cookies[0]?.value,'fixture-live-access-token');
+    const prefKeys=await (await page(importedId)).executeJavaScript("new Promise((resolve,reject)=>{const q=indexedDB.open('model-storage');q.onsuccess=()=>{const db=q.result,ask=db.transaction('user-prefs').objectStore('user-prefs').getAllKeys();ask.onsuccess=()=>{db.close();resolve(ask.result)};ask.onerror=()=>reject(ask.error)};q.onerror=()=>reject(q.error)})");
+    assert.deepEqual(prefKeys,['WAADVSecretKey','WAHistorySyncStatus','WAInitialHistorySynced']);
     const id=await ui('state.accounts[0].id'), w=await page(id);
     assert.equal(await w.executeJavaScript('localStorage.owner'),'123456@c.us');
     assert.equal(await w.executeJavaScript(take),'kept across computers');

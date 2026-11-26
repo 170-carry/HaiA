@@ -1,0 +1,280 @@
+/* Components. One definition of each control, used everywhere.
+   This file is unlayered, so it wins over every layout file: change a button here and it changes in the whole app.
+   To give a new element one of these looks, add its selector to the list — do not restyle it locally. */
+
+/* ───────── Buttons ─────────
+   Regular 28px · small 24px · large 36px. Quiet grey by default; one accent button per view. */
+:is(dialog footer, .settings-row, .own-photo-actions, .own-field, .own-blocked-row, .status-compose, .invite-tools,
+    .group-quick, .group-field, .member-add, .member-tools, .template-row, .call-buttons, .backup-actions,
+    #recording, #dictation, #select-bar, #draft-proposal, #phone-form) button,
+.primary, .health-action, .notice-action, #profile-reply, #preview-open, #archive-back {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; flex:none;
+  min-height:var(--h-control); padding:0 12px; border:0; border-radius:var(--r-control);
+  background:var(--btn-bg,var(--fill)); color:var(--btn-ink,var(--ink));
+  font-size:13px; font-weight:500; line-height:1.2; white-space:nowrap; text-decoration:none;
+  box-shadow:inset 0 .5px 0 #ffffff1f; filter:none;
+}
+:is(dialog footer, .settings-row, .own-photo-actions, .own-field, .own-blocked-row, .status-compose, .invite-tools,
+    .group-quick, .group-field, .member-add, .member-tools, .template-row, .call-buttons, .backup-actions,
+    #recording, #dictation, #select-bar, #draft-proposal, #phone-form) button:hover:not(:disabled),
+:is(.primary, .health-action, .notice-action, #profile-reply, #preview-open, #archive-back):hover:not(:disabled) {
+  background:var(--btn-hover,var(--fill-hover)); filter:none;
+}
+/* The action the view exists for. */
+.primary, #select-forward, #recording-send, #dictation-done, #apply-draft { --btn-bg:var(--accent); --btn-hover:var(--accent-hover); --btn-ink:#fff; }
+/* Irreversible. */
+button.danger, .call-buttons .hangup { --btn-bg:var(--danger); --btn-hover:#ff6259; --btn-ink:#fff; }
+.call-buttons .accept { --btn-bg:var(--ok); --btn-hover:#4ada6f; --btn-ink:#04220d; }
+.danger-item, .template-row button { --btn-ink:var(--danger-ink); }
+/* Small: inside rows and bars. */
+:is(.member-tools, .template-row, .call-buttons, .own-blocked-row, #recording, #dictation, #select-bar, #draft-proposal) button,
+.health-action, .notice-action, #archive-back {
+  min-height:var(--h-small); padding:0 10px; font-size:12px; border-radius:5px;
+}
+/* Large: the single call to action on an otherwise empty screen. */
+#first, #request-code, #preview-open, .backup-actions .primary {
+  min-height:var(--h-large); padding:0 18px; font-size:14px; font-weight:600; border-radius:var(--r-card);
+}
+.backup-actions .primary { flex:1; }
+.group-quick button { flex:1; }
+#dictation.busy #dictation-done { display:none; }
+/* Text buttons: an action that sits inside running content. */
+button.plain, .detail-action, .remove-key, #dictation-language, #dismiss-draft {
+  --btn-bg:transparent; --btn-hover:var(--fill); --btn-ink:var(--accent-ink);
+  background:var(--btn-bg); color:var(--btn-ink); box-shadow:none;
+  padding:3px 8px; border-radius:5px; font-size:12px; font-weight:500;
+}
+:is(button.plain, .detail-action, .remove-key):hover:not(:disabled) { background:var(--fill); }
+button.plain { display:block; margin:10px auto; padding:5px 12px; font-size:13px; }
+.settings-row button.plain { display:inline-flex; margin:0; }
+
+/* ───────── Icon buttons and icons ─────────
+   Icons are 16px (14px in dense rows, 18px on the rail) with one stroke weight at every size. */
+.icon-button { width:var(--h-control); height:var(--h-control); padding:0; border-radius:var(--r-control); color:var(--muted); background:transparent; }
+.icon-button:is(:hover,:focus-visible,[aria-pressed=true],[aria-expanded=true]) { background:var(--fill); color:var(--ink); }
+.icon-button svg { width:16px; height:16px; }
+:is(.feed-tools, #reply-context, .attachment) .icon-button, #remark-edit { width:var(--h-small); height:var(--h-small); border-radius:5px; }
+:is(.feed-tools, #reply-context, .attachment) .icon-button svg, #remark-edit svg { width:14px; height:14px; }
+/* Every dialog closes with the same button in the same corner. */
+.dialog-close { margin:-4px -6px -4px 0; }
+/* Send is the primary action of the conversation. */
+#send { border-radius:50%; }
+#send:not(:disabled) { background:var(--accent); color:#fff; }
+#send:not(:disabled):hover { background:var(--accent-hover); }
+#send svg { width:15px; height:15px; margin:1px 1px 0 0; }
+
+/* ───────── Fields ─────────
+   Text fields, search fields and pop-up buttons share one shape, one fill and one focus ring. */
+:is(dialog, #phone-form, #profile) :is(input:not([type=checkbox],[type=radio],[type=file],.label-new), select),
+:is(dialog, #profile) textarea {
+  min-height:var(--h-control); padding:4px 9px; border:1px solid var(--line-strong); border-radius:var(--r-control);
+  background:var(--control); color:var(--ink); font-size:13px; font-weight:400; line-height:1.35; box-shadow:none; outline:0;
+}
+:is(dialog, #profile) textarea { padding:6px 9px; }
+:is(dialog, #phone-form, #profile) :is(input:not([type=checkbox],[type=radio],[type=file]), select, textarea):focus-visible,
+.search:focus-within, #thread-search:focus-within, .compose-inner:focus-within {
+  outline:0; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);
+}
+:is(dialog, #profile) select { padding-right:8px; cursor:default; }
+select::picker-icon { content:""; flex:none; width:6px; height:6px; margin:0 3px 3px 8px; border:solid var(--muted); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
+.search, #thread-search {
+  display:flex; align-items:center; gap:6px; height:var(--h-control); padding:0 8px;
+  border:1px solid var(--line); border-radius:var(--r-control); background:var(--control); color:var(--muted);
+}
+.search svg, #thread-search svg { width:14px; height:14px; flex:none; color:var(--muted); }
+#thread-search i { order:-1; }
+.search input, #thread-search input { font-size:13px; color:var(--ink); padding:0; }
+.compose-inner { min-height:40px; border:1px solid var(--line-strong); border-radius:10px; background:var(--control); }
+input::placeholder, textarea::placeholder { color:var(--faint); }
+
+/* ───────── Segmented controls ───────── */
+.feed-kinds, #pair-mode, .backup-tabs { display:flex; gap:1px; padding:2px; border:0; border-radius:7px; background:var(--fill); }
+.backup-tabs { display:grid; }
+:is(.feed-kinds, #pair-mode, .backup-tabs) button {
+  min-height:22px; padding:0 7px; border-radius:5px; background:transparent; color:var(--muted);
+  font-size:12px; font-weight:500; white-space:nowrap; box-shadow:none;
+}
+:is(#pair-mode, .backup-tabs) button { min-height:26px; padding:0 14px; font-size:13px; }
+:is(.feed-kinds, #pair-mode, .backup-tabs) button:hover { color:var(--ink); background:transparent; }
+:is(.feed-kinds, #pair-mode, .backup-tabs) button:is([aria-pressed=true],[aria-selected=true]) {
+  background:var(--fill-strong); color:var(--ink); font-weight:600; box-shadow:0 1px 2px #00000040;
+}
+
+/* ───────── Source lists ─────────
+   The selected item in a list of places is the accent; everything else stays quiet. */
+:is(.settings-nav, .group-shell nav) button {
+  display:flex; align-items:center; gap:8px; width:100%; min-height:var(--h-control); padding:0 9px;
+  border-radius:var(--r-control); color:var(--ink); font-size:13px; font-weight:400; text-align:left;
+}
+:is(.settings-nav, .group-shell nav) button svg { color:var(--accent-ink); }
+:is(.settings-nav, .group-shell nav) button:hover { background:var(--fill); }
+:is(.settings-nav, .group-shell nav) button[aria-pressed=true],
+.row.current { background:var(--accent); color:#fff; --row-bg:var(--accent); }
+:is(.settings-nav, .group-shell nav) button[aria-pressed=true] svg { color:#fff; }
+
+/* ───────── Menus ───────── */
+#menu, #attach-menu, #chat-menu, #message-menu, #emoji-picker, select::picker(select) {
+  padding:5px; border:1px solid var(--line-strong); border-radius:var(--r-card);
+  background:var(--menu); color:var(--ink); box-shadow:var(--shadow);
+}
+#emoji-picker { padding:10px; border-radius:var(--r-panel); }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > button {
+  display:flex; align-items:center; gap:8px; width:100%; min-height:26px; padding:3px 8px;
+  border-radius:5px; font-size:13px; text-align:left;
+}
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > button svg { width:16px; height:16px; color:var(--muted); }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > button:is(:hover,:focus-visible),
+select option:is(:hover,:focus-visible) { background:var(--accent); color:#fff; outline:0; }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > button:is(:hover,:focus-visible) :is(svg, small) { color:#fff; }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > :is(.danger-item, #remove) { color:var(--danger-ink); }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > :is(.danger-item, #remove) svg { color:var(--danger-ink); }
+:is(#menu, #attach-menu, #chat-menu, #message-menu) > :is(.danger-item, #remove):is(:hover,:focus-visible) { background:var(--danger); color:#fff; }
+select option { min-height:24px; padding:3px 8px; border-radius:5px; font-size:13px; }
+select option:checked { background:var(--fill); }
+.message-tools { background:var(--menu); border:1px solid var(--line-strong); border-radius:7px; }
+.message-tools button:is(:hover,:focus-visible) { background:var(--fill-hover); color:var(--ink); }
+
+/* ───────── Dialogs ───────── */
+dialog { padding:20px; border:1px solid var(--line-strong); border-radius:var(--r-panel); background:var(--raised); box-shadow:0 24px 70px #00000080, 0 0 0 .5px #000000a6; }
+dialog h2, .group-shell h2 { font-size:15px; font-weight:600; letter-spacing:0; }
+#account-dialog h3, .info-section h3, .settings-group h3 { font-size:11px; font-weight:500; color:var(--muted); }
+.settings-pages .settings-group h3 { font-size:13px; font-weight:600; color:var(--ink); }
+dialog p { font-size:12px; line-height:1.55; }
+#group-dialog, #media-viewer { padding:0; } #media-viewer { padding:12px; }
+.group-shell nav { background:#00000026; }
+dialog footer { gap:8px; }
+
+/* ───────── Badges and tags ───────── */
+.badge, #health-count, .conversation-unread, #scope-unread, #jump-count, #archived-count {
+  flex:none; min-width:16px; height:16px; padding:0 4.5px; border-radius:8px;
+  font:600 10px/16px -apple-system, system-ui, sans-serif; text-align:center; color:#fff; font-variant-numeric:tabular-nums;
+}
+.badge, #health-count { background:var(--danger); border:0; box-shadow:0 0 0 2px var(--rail-bg); }
+.conversation-unread, #scope-unread, #jump-count { background:var(--accent); }
+#archived-count { background:var(--fill-strong); }
+.row.current .conversation-unread { background:#ffffff; color:var(--accent); }
+.group-tag, .limit-tag, .row-state {
+  flex:none; padding:1px 5px; border:0; border-radius:4px; background:var(--fill); color:var(--muted);
+  font-size:10px; font-weight:500; line-height:14px;
+}
+.limit-tag, .row-state { background:var(--warn-bg); color:var(--warn-ink); }
+.row.current :is(.group-tag, .row-state) { background:#ffffff33; color:#fff; }
+
+/* ───────── Shell: three surfaces that step apart ───────── */
+body { background:var(--content); }
+.topline, .account-rail { background:var(--rail-bg); }
+.topline { color:var(--muted); font-size:12px; gap:6px; } .topline strong { font-weight:600; } .topline svg { width:14px; height:14px; }
+.account-rail { border-right:0; }
+main { border-top:0; }
+.feed { background:var(--sidebar); border-right:1px solid #00000059; }
+.rail-button .tile, .rail-button > i { border-radius:10px; }
+.rail-button > i svg, :is(#open-backup, #open-settings, #health) svg { width:18px; height:18px; }
+.rail-button.add > i { background:transparent; color:var(--muted); box-shadow:inset 0 0 0 1px var(--line-strong); }
+.rail-button.add:hover > i { background:var(--fill); color:var(--ink); }
+:is(#open-backup, #open-settings, #health) > i { width:36px; height:36px; border-radius:var(--r-card); background:transparent; }
+:is(#open-backup, #open-settings, #health):hover > i { background:var(--fill); }
+.status-dot { border-color:var(--rail-bg); }
+.identity { background:var(--raised); border:1px solid var(--line); border-radius:10px; box-shadow:0 4px 14px #00000040; }
+.dock-icon::after { border-color:var(--raised); }
+.feed-top { border-bottom:0; height:46px; }
+.feed-heading { padding:2px 8px 8px 10px; }
+
+/* ───────── Conversation list ───────── */
+.row { border-radius:var(--r-card); --row-bg:var(--sidebar); }
+.row:hover:not(.current) { background:var(--fill); }
+.row-top strong { font-size:13px; font-weight:500; }
+.snippet { font-size:12px; }
+.row.unread .row-top strong { font-weight:600; color:var(--ink); }
+.row.unread .snippet { color:var(--ink); }
+.row.unread time { color:var(--accent-ink); }
+.row.unread::before { background:var(--accent); width:3px; }
+.row.current :is(.snippet, time, .row-flag svg, .draft-mark), .row.current.unread :is(.snippet, time) { color:#ffffffd1; }
+.row.current .row-top strong { color:#fff; }
+.row.current.unread::before { background:transparent; }
+.row-more { background:var(--menu); border-color:var(--line-strong); border-radius:var(--r-control); }
+
+/* ───────── Conversation ───────── */
+#reader-head, #composer, #match-status { background:var(--content); }
+#reader-head { border-bottom:1px solid var(--line); }
+.reader-title strong { font-size:15px; font-weight:600; }
+.message-body { border-radius:5px 14px 14px 14px; box-shadow:none; }
+.outgoing .message-body { border-radius:14px 5px 14px 14px; color:#fff; }
+.outgoing :is(.text-link, .mention, .receipt.read, .quote strong) { color:#fff; }
+.outgoing .receipt { color:#ffffff99; }
+.outgoing .quote { border-left-color:#ffffffb3; }
+.date-pill::before, .date-pill::after { background:var(--line); }
+.message.system { background:transparent; }
+.message.system .message-text { color:var(--muted); }
+#jump-bottom { background:var(--menu); border-color:var(--line-strong); }
+
+/* ───────── Inspector ───────── */
+#profile { background:var(--sidebar); border-left:1px solid #00000059; }
+.profile-info h2 { font-size:17px; font-weight:600; }
+#profile-kind { font-size:12px; color:var(--muted); }
+.detail-label, .profile-info dt { font-size:11px; font-weight:500; color:var(--muted); }
+.detail-value, .profile-info dd { font-size:13px; }
+.switch-row { background:var(--fill); border-radius:var(--r-card); }
+#profile-more, #profile-danger:not(:empty) { border-top:1px solid var(--line); }
+#profile-more summary { font-size:12px; font-weight:500; color:var(--muted); }
+#profile-more summary:hover { color:var(--ink); }
+#profile-more summary::after { border:solid currentColor; border-width:0 1.5px 1.5px 0; }
+#profile-danger .switch-row.danger-item { width:100%; margin:0; }
+/* The panel sits beside the conversation on a wide window, so "back to the conversation" only exists when it covers it. */
+#profile-reply { margin:auto 16px 16px; }
+@media(min-width:1080px) { #profile-reply { display:none; } }
+
+/* ───────── Shared row and card surfaces ───────── */
+.health-row, .status-item, .backup-row, .backup-account, .overview-row, .attachment,
+#select-bar, #upload-progress, #recording, #dictation, #archive-note, #draft-proposal, #reply-context {
+  background:var(--fill); border-color:var(--line); border-radius:var(--r-card);
+}
+.overview-row { border:0; } .overview-row:hover { background:var(--fill-hover); }
+.backup-account:has(input:checked) { background:var(--accent-soft); border-color:var(--accent); }
+.setup .state-panel { background:var(--raised); border-color:var(--line); border-radius:16px; }
+.state-panel .state-icon { background:var(--fill); color:var(--muted); }
+.welcome-mark { border-radius:16px; }
+#empty h2, #welcome h1 { font-size:20px; font-weight:600; letter-spacing:0; }
+#warning { background:var(--menu); border-color:var(--line-strong); border-left-color:var(--accent); }
+[data-tip]::after { background:var(--menu); border:1px solid var(--line-strong); font-size:11px; }
+
+/* ───────── Placement that belongs to the components above ───────── */
+.badge { position:absolute; top:-3px; right:7px; bottom:auto; }
+#health-count { position:absolute; top:0; right:10px; bottom:auto; }
+.feed-kinds button { display:inline-flex; align-items:center; gap:4px; }
+.feed-kinds #scope-unread { position:static; }
+/* The rail keeps its colour for the accounts; the "all accounts" tile is neutral until it is the selected one. */
+.rail-button.home > i { background:var(--fill); color:var(--muted); }
+.rail-button.home.selected > i { background:var(--accent); color:#fff; }
+.setup .state-icon { background:transparent url(assets/whatsapp.svg) center/36px no-repeat; }
+/* Rows of a settings form read as one list: same size, same weight, same left edge. */
+.settings-choice, .auto-setting, .settings-row, .settings-row label, .own-privacy-row, .own-blocked-row { font-size:13px; font-weight:400; color:var(--ink); }
+.auto-setting { margin:0 -8px; padding:6px 8px; gap:9px; }
+#auto-translate { margin:0; }
+/* Names in lists are medium weight; bold is kept for unread and for titles. */
+:is(.person-result, .health-words, .backup-words, .overview-words, .search-top, .template-row, .identity, .group-row, .call-words) strong { font-weight:500; }
+.health-title { font-size:11px; font-weight:500; }
+.health-row { flex-wrap:wrap; }
+.health-words { flex:1 1 calc(100% - 60px); }
+
+/* ───────── Switches ─────────
+   One switch, whether it is a checkbox or a row with aria-checked. */
+#auto-translate, #translate-compact, .switch {
+  appearance:none; position:relative; flex:none; width:32px; height:18px; margin:0; padding:0; border:0; border-radius:999px;
+  background:var(--fill-strong); cursor:pointer; transition:background-color 150ms;
+}
+:is(#auto-translate, #translate-compact, .switch)::after {
+  content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 2px #00000059; transition:transform 150ms var(--motion);
+}
+:is(#auto-translate, #translate-compact):checked, [aria-checked=true] > .switch { background:var(--accent); }
+:is(#auto-translate, #translate-compact):checked::after, [aria-checked=true] > .switch::after { transform:translateX(14px); }
+.switch-row.danger-item[aria-checked=true] > .switch { background:var(--danger); }
+.switch-row:not(.danger-item) .switch { display:none; }
+
+/* ───────── Hover feedback for surfaces defined above ───────── */
+.switch-row:hover:not([aria-checked=true]), .row-more:hover { background:var(--fill-hover); }
+.row-more:hover { color:var(--ink); }
+#jump-bottom:hover { background:#3d3d40; }
+/* A quick reply in the attachment menu is a title over a preview line. */
+#attach-menu > .template-option { display:grid; gap:1px; }
+@media(max-width:1000px) { .feed-heading { gap:2px; padding-inline:8px 6px; } .feed-kinds button { padding:0 5px; } }

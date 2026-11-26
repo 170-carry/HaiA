@@ -1,35 +1,33 @@
 body { height: 100vh; display: grid; grid-template: var(--strip) minmax(0,1fr) / var(--rail) minmax(0,1fr); overflow: hidden; }
-.topline { grid-column: 1/-1; display: flex; justify-content: center; align-items: center; gap: 8px; background: var(--nav); color: var(--ink); -webkit-app-region: drag; }
-.topline svg { width: 17px; height: 17px; }
-.account-rail { background: var(--nav); border-right: 1px solid var(--line); min-height: 0; }
+.topline { grid-column: 1/-1; display: flex; justify-content: center; align-items: center; -webkit-app-region: drag; }
+.account-rail { min-height: 0; }
 .account-rail nav { margin-bottom:66px; max-height:calc(100% - 66px); overflow: auto; scrollbar-width: none; height: 100%; padding-block: 4px 12px; }
 .rail-button { display: grid; place-items: center; position: relative; width: 100%; height: 40px; padding: 0; margin-bottom: 8px; color: var(--ink); }
 .rail-button:before { content: ""; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 4px; height: 0; border-radius: 0 6px 6px 0; background: white; }
 .rail-button.selected:before { height: 33px; }
 .rail-button:hover:not(.selected):before { height: 14px; }
-.rail-button .tile, .rail-button > i { width: 40px; height: 40px; position: relative; border-radius: 12px; }
+.rail-button .tile, .rail-button > i { width: 40px; height: 40px; position: relative; }
 .rail-button .tile { font-size: 17px; }
 .rail-button.home > i { background: var(--accent); }
 .rail-button.add > i { background: var(--soft); }
 .rail-button.add:hover > i { background: var(--accent); }
 .rail-rule { margin: 0 auto 10px; width: 30px; border-top: 1px solid var(--line); }
 .status-dot, .badge { position: absolute; border-radius: 12px; border: 2px solid var(--nav); }
-.status-dot { width: 10px; height: 10px; right: -1px; bottom: -1px; background: #999ba4; }
-.status-dot.online { background: #43a36c; }
-.status-dot.pair, .status-dot.offline { background: #efb34c; }
-.badge { right: 8%; bottom: 0; background: #da3744; color: white; font: bold 10px/14px system-ui; padding-inline: 3px; }
-main { display: flex; min-height: 0; min-width: 0; flex-direction: column; border-top: 1px solid var(--line); }
+.status-dot { width: 10px; height: 10px; right: -1px; bottom: -1px; background: var(--faint); }
+.status-dot.online { background: var(--ok); }
+.status-dot.pair, .status-dot.offline { background: var(--warn); }
+main { display: flex; min-height: 0; min-width: 0; flex-direction: column; }
 #warning { position: relative; z-index: 2; }
-.identity { margin-left:calc(8px - var(--rail)); position:relative; z-index:1; display: flex; align-items: center; gap: 9px; padding: 8px 10px; background: #35363c; border: 1px solid var(--line); border-radius: 9px; margin:8px 8px 8px calc(8px - var(--rail)); }
+.identity { margin-left:calc(8px - var(--rail)); position:relative; z-index:1; display: flex; align-items: center; gap: 9px; padding: 8px 10px; margin:8px 8px 8px calc(8px - var(--rail)); }
 .identity > div { min-width: 0; }
 .identity strong, .identity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .identity small { font-size: 11px; color: var(--muted); }
-.dock-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; background: #555a73; border-radius: 50%; }
+.dock-icon { width: 34px; height: 34px; flex: none; display: grid; place-items: center; background: var(--fill-strong); border-radius: 50%; }
 #welcome { margin: auto; max-width: 480px; padding: 32px; text-align: center; }
-.welcome-mark { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 16px; border-radius: 18px; background: var(--accent); }
+.welcome-mark { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 16px; background: var(--accent); }
 .welcome-mark svg { width: 32px; height: 32px; }
 #welcome p { margin: 10px 0 22px; color: var(--muted); }
-.dock-icon { position:relative; background:var(--tint,#555a73); font-weight:700; }
-.dock-icon::after { content:""; position:absolute; right:-1px; bottom:-1px; width:9px; height:9px; border:2px solid #35363c; border-radius:50%; background:#92949c; }
-.dock-icon.online::after { background:#43aa71; }
+.dock-icon { position:relative; background:var(--tint,var(--fill-strong)); font-weight:700; }
+.dock-icon::after { content:""; position:absolute; right:-1px; bottom:-1px; width:9px; height:9px; border:2px solid var(--nav); border-radius:50%; background:var(--faint); }
+.dock-icon.online::after { background:var(--ok); }
 #dock-search { margin-left:auto; }

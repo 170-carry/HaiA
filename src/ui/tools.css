@@ -1,56 +1,40 @@
 .account-rail { position:relative; }
 #health { position:absolute; left:0; bottom:70px; width:100%; height:40px; display:grid; place-items:center; color:var(--muted); }
-#health > i { width:40px; height:40px; border-radius:12px; background:var(--soft); color:#6fd39b; }
-#health:hover > i { background:var(--active); }
-#health.alert > i { color:#ffb14a; }
-#health-count { position:absolute; right:8%; bottom:0; border:2px solid var(--nav); border-radius:12px; background:#da3744; color:white; font:bold 10px/14px system-ui; padding-inline:4px; }
+#health > i { color:var(--ok-ink); }
+#health.alert > i { color:var(--warn); }
+#health-count { padding-inline:4px; }
 .account-rail nav { margin-bottom:162px; max-height:calc(100% - 162px); }
 #health-dialog { width:min(480px,94vw); }
-#health-summary { font-size:12px; margin:4px 0 6px; }
+#health-summary { margin:4px 0 6px; }
 #health-list { max-height:56vh; overflow:auto; }
-.health-title { font-size:12px; margin:14px 0 6px; color:var(--muted); }
-.health-title.bad { color:#ffb1a8; } .health-title.ok { color:#8fe0bd; }
-.health-row { display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; background:var(--soft); margin-bottom:6px; border-left:3px solid #8a8c96; }
-.health-row.ok { border-left-color:#43a36c; } .health-row.bad { border-left-color:#e2574c; }
-.health-row .avatar { width:34px; height:34px; border-radius:10px; }
-.health-words { flex:1; min-width:0; display:grid; }
+.health-title { margin:14px 0 6px; color:var(--muted); }
+.health-title.bad { color:var(--danger-ink); } .health-title.ok { color:var(--ok-ink); }
+.health-row { display:flex; align-items:center; gap:10px; padding:8px; margin-bottom:6px; border-left:3px solid var(--faint); }
+.health-row .avatar { width:34px; height:34px; border-radius:8px; }
+.health-words { min-width:0; display:grid; }
 .health-words strong { font-size:14px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .health-words small { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
-.health-row.bad small { color:#ffc9c2; }
-.health-action { flex:none; background:#464852; color:#eeeef5; padding:6px 11px; border-radius:7px; font-size:12px; font-weight:600; }
-.health-action:hover { filter:brightness(1.12); }
+.health-row.bad small { color:var(--danger-ink); }
 #forward-results { max-height:44vh; overflow:auto; }
-#forward-status { font-size:12px; margin:10px 0; }
-#recording { display:flex; align-items:center; gap:10px; margin:2px 0 6px; padding:6px 8px 6px 12px; border-radius:8px; background:var(--soft); }
-#recording::before { content:""; width:10px; height:10px; border-radius:50%; background:#e2574c; animation:recording-pulse 1.1s ease-in-out infinite; }
+#forward-status { margin:10px 0; }
+#recording { display:flex; align-items:center; gap:10px; margin:2px 0 6px; padding:6px 8px 6px 12px; }
+#recording::before { content:""; width:10px; height:10px; border-radius:50%; background:var(--danger); animation:recording-pulse 1.1s ease-in-out infinite; }
 #recording-time { flex:1; font-variant-numeric:tabular-nums; }
-#recording button { padding:5px 11px; border-radius:7px; font-size:12px; font-weight:600; background:#464852; }
-#recording #recording-send { background:var(--accent); color:white; }
 @keyframes recording-pulse { 50% { opacity:.25; } }
 @media (prefers-reduced-motion:reduce) { #recording::before { animation:none; } }
 #create-group select, #create-group textarea { display:block; width:100%; margin-bottom:12px; }
-#create-group select { padding:8px; color:var(--ink); background:var(--control); border-radius:7px; border:1px solid var(--control-edge); }
 #create-group textarea { min-height:86px; resize:vertical; }
 #create-group input { margin-bottom:12px; }
-#create-group-error { color:#ffb5ac; font-size:12px; }
-#dictation { display:flex; align-items:center; gap:8px; margin:2px 0 6px; padding:6px 8px 6px 12px; border-radius:8px; background:var(--soft); border:1px solid #494a51; }
-#dictation::before { content:""; flex:none; width:10px; height:10px; border-radius:50%; background:#5865f2; box-shadow:0 0 0 4px #5865f233; animation:recording-pulse 1.1s ease-in-out infinite; }
-#dictation.busy::before { background:#8fe0bd; box-shadow:none; }
+#create-group-error { color:var(--danger-ink); font-size:12px; }
+#dictation { display:flex; align-items:center; gap:8px; margin:2px 0 6px; padding:6px 8px 6px 12px; border:1px solid var(--line-strong); }
+#dictation::before { content:""; flex:none; width:10px; height:10px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px var(--accent-soft); animation:recording-pulse 1.1s ease-in-out infinite; }
+#dictation.busy::before { background:var(--ok-ink); box-shadow:none; }
 #dictation.busy #dictation-done { display:none; }
 #dictation-status { flex:1; min-width:0; font-size:13px; font-variant-numeric:tabular-nums; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-#dictation button { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:7px; font-size:12px; font-weight:600; background:#464852; }
-#dictation button:hover, #recording button:hover { filter:brightness(1.12); }
-#dictation #dictation-language { background:transparent; color:var(--accent-ink); padding-inline:6px; }
-#dictation #dictation-language:hover { background:var(--active); }
 #dictation-language svg { width:14px; height:14px; }
-#dictation #dictation-done { background:var(--accent); color:white; }
-#voice-settings select { display:block; width:100%; padding:8px; color:var(--ink); background:var(--control); border-radius:7px; border:1px solid var(--control-edge); }
-#voice-settings p { font-size:12px; }
-#voice-error { margin-top:8px; color:#ffb5ac; font-size:12px; }
+#voice-error { margin-top:8px; color:var(--danger-ink); font-size:12px; }
 @media (prefers-reduced-motion:reduce) { #dictation::before { animation:none; } }
 body.unlinked .work { position:relative; grid-template-columns:0 minmax(0,1fr); }
-body.unlinked .feed { border-right:0; overflow:visible; }
+body.unlinked .feed { overflow:visible; }
 body.unlinked .feed > :not(.identity), body.unlinked .identity > :not(#dock-profile) { display:none; }
-body.unlinked .identity { position:absolute; left:calc(8px - var(--rail)); bottom:8px; width:calc(var(--rail) - 16px); margin:0; padding:8px 0; justify-content:center; }
-
-.health-row.limit { border-left-color:#e0a03c; } .health-row.limit small { color:#ffdcb0; } .health-title.limit { color:#f0b860; }
+body.unlinked .identity { position:absolute; left:calc(8px - var(--rail)); bottom:8px; width:calc(var(--rail) - 16px); margin:0; padding:8px 0; justify-content:center; } .health-row.limit small { color:var(--warn-ink); } .health-title.limit { color:var(--warn-ink); }

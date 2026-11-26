@@ -1,55 +1,35 @@
-:root { --control:#202126; --control-edge:#52545e; --motion:cubic-bezier(.2,.72,.24,1); }
 button,input,textarea,select,dialog { appearance:none; }
 input,textarea,select { font:inherit; color:var(--ink); }
 button { transition:background-color 120ms,color 120ms,box-shadow 120ms,transform 100ms var(--motion); }
 button:active:not(:disabled) { transform:translateY(1px); }
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
-button.danger { background:#ba3547; color:white; }
-dialog { padding:22px; border-radius:14px; border:1px solid #51535d; box-shadow:0 18px 72px #10111878; }
-dialog label { color:#d2d4dd; }
-dialog input:not([type=checkbox]), dialog textarea, .language-pair select, #phone { background:var(--control); color:var(--ink); border:1px solid var(--control-edge); border-radius:7px; padding:9px 11px; }
-input::placeholder,textarea::placeholder { color:#a0a2ad; }
-dialog input:not([type=checkbox]):focus,dialog textarea:focus { outline:0; border-color:var(--ring); box-shadow:0 0 0 2px #8793ff24; }
+dialog label { color:var(--muted); }
 input[type=search]::-webkit-search-cancel-button { appearance:none; }
 textarea { resize:none; }
 #reply { field-sizing:content; resize:none; }
-dialog footer button,.people-head button,.group-field .primary { background:#464852; color:#eeeef5; padding:8px 13px; border-radius:7px; font-weight:600; }
-dialog footer .primary,.group-field .primary { background:var(--accent); color:white; }
-dialog footer .danger { background:#ba3547; }
-dialog footer button:hover,.people-head button:hover { filter:brightness(1.1); }
-.auto-setting { display:flex; align-items:center; gap:8px; }
-#auto-translate { position:relative; width:34px; height:19px; padding:0; border:0; border-radius:12px; background:#545660; cursor:pointer; transition:background-color 150ms; }
-#auto-translate:checked { background:var(--accent); }
-#auto-translate::after { content:""; position:absolute; width:13px; height:13px; top:3px; left:3px; border-radius:100%; background:white; transition:transform 150ms var(--motion); }
-#auto-translate:checked::after { transform:translateX(15px); }
+.auto-setting { display:flex; align-items:center; }
 select,.language-pair select,select::picker(select) { appearance:base-select; }
-select::picker(select) { background:#26272c; color:var(--ink); border:1px solid #50515b; border-radius:8px; padding:4px; box-shadow:var(--shadow); }
-select option { padding:6px 9px; border-radius:5px; font-weight:400; }
-select option:checked,select option:hover { background:#454750; }
+select option { font-weight:400; }
+select option:checked,select option:hover { background:var(--fill-hover); }
 dialog,[popover] { opacity:0; transform:translateY(4px) scale(.98); transition:opacity 140ms ease,transform 160ms var(--motion),display 160ms allow-discrete,overlay 160ms allow-discrete; }
 dialog[open],[popover]:popover-open { opacity:1; transform:none; }
 @starting-style {dialog[open],[popover]:popover-open { opacity:0; transform:translateY(6px) scale(.97); }}
-dialog::backdrop { background:#0b0c1080; backdrop-filter:blur(2px); opacity:0; transition:opacity 140ms,display 160ms allow-discrete,overlay 160ms allow-discrete; }
+dialog::backdrop { background:#00000080; backdrop-filter:blur(2px); opacity:0; transition:opacity 140ms,display 160ms allow-discrete,overlay 160ms allow-discrete; }
 dialog[open]::backdrop { opacity:1; }
 @starting-style { dialog[open]::backdrop { opacity:0; } }
 @keyframes chat-arrival { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
 .message.arriving { animation:chat-arrival 180ms var(--motion); }
 [data-tip] { position:relative; }
-[data-tip]::after { content:attr(data-tip); pointer-events:none; position:absolute; top:calc(100% + 6px); right:0; z-index:5; white-space:nowrap; padding:5px 8px; border-radius:5px; background:#17181c; color:white; font-size:12px; opacity:0; transition:opacity 100ms; }
+[data-tip]::after { content:attr(data-tip); pointer-events:none; position:absolute; top:calc(100% + 6px); right:0; z-index:5; white-space:nowrap; padding:5px 8px; border-radius:5px; background:var(--menu); color:white; font-size:12px; opacity:0; transition:opacity 100ms; }
 [data-tip]:is(:hover,:focus-visible)::after { opacity:1; }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition-duration:0s!important; } }
-#name-error { font-size:12px; color:#ffb4ab; margin-top:4px; }
-#reader-head .icon-button:is(:hover,:focus-visible) { color:var(--ink); background:#42444c; }
-#translation-engine { display:block; width:100%; margin:5px 0; padding:9px 11px; border-radius:7px; background:var(--control); border:1px solid var(--control-edge); }
+#name-error { font-size:12px; color:var(--danger-ink); margin-top:4px; }
 .engine-field { margin-top:12px; }
 .chat-identity { display:flex; flex:1; align-items:center; min-width:0; gap:9px; text-align:left; padding:3px; border-radius:6px; }
 .chat-identity:disabled { opacity:1; } .chat-identity:not(:disabled):hover .reader-title strong { text-decoration:underline; }
 .account[data-menu-owner] { anchor-name:--account-context; }
-#menu { position:fixed; position-anchor:--account-context; position-area:right span-bottom; position-try-fallbacks:flip-block; align-self:start; justify-self:start; inset:auto; margin:0 0 0 5px; padding:5px; min-width:156px; border-radius:9px; background:#24252a; border:1px solid var(--line); color:var(--ink); box-shadow:var(--shadow); }
+#menu { position:fixed; position-anchor:--account-context; position-area:right span-bottom; position-try-fallbacks:flip-block; align-self:start; justify-self:start; inset:auto; margin:0 0 0 5px; min-width:156px; }
 #menu-account { display:block; padding:4px 8px 6px; margin-bottom:3px; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#menu button { display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; text-align:left; border-radius:5px; }
-#menu button svg { width:15px; height:15px; }
-#menu button:hover,#menu button:focus-visible { background:#444651; color:white; }
-#remove { color:#ff949d; }
+#remove { color:var(--danger-ink); }
 #account-dialog p { margin:3px 0; }
 

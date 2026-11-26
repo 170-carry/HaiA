@@ -1,27 +1,27 @@
 .message { position:relative; }
 .message-body { position:relative; }
-.message-tools { position:absolute; top:-14px; right:6px; display:flex; padding:2px; border-radius:8px; background:#24252a; border:1px solid var(--line); box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity 100ms; z-index:1; }
+.message-tools { position:absolute; top:-14px; right:6px; display:flex; padding:2px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:opacity 100ms; z-index:1; }
 .outgoing .message-tools { right:auto; left:6px; }
 .message:hover .message-tools, .message:focus-within .message-tools { opacity:1; pointer-events:auto; }
 .message-tools button { width:26px; height:24px; display:grid; place-items:center; border-radius:6px; color:var(--muted); }
-.message-tools button:hover, .message-tools button:focus-visible { background:#444651; color:white; }
-.message-tools svg { width:15px; height:15px; }
-.message-flag { display:block; font-size:11px; font-style:italic; color:#b9c4c1; margin-bottom:2px; }
+.message-tools button:hover, .message-tools button:focus-visible { background:var(--accent); color:white; }
+.message-tools svg { width:16px; height:16px; }
+.message-flag { display:block; font-size:11px; font-style:italic; color:var(--bubble-sub); margin-bottom:2px; }
 .edited { font-style:italic; }
-.revoked .message-text { font-style:italic; color:#b9c0c7; }
-.quote { display:grid; gap:1px; width:100%; margin:0 0 5px; padding:5px 8px; text-align:left; border-left:3px solid #7fd8b8; border-radius:5px; background:#0000002e; }
-.quote strong { font-size:12px; color:#9be3c8; }
-.quote span { font-size:12px; color:#d3d9d8; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+.revoked .message-text { font-style:italic; color:var(--muted); }
+.quote { display:grid; gap:1px; width:100%; margin:0 0 5px; padding:5px 8px; text-align:left; border-left:3px solid var(--accent); border-radius:5px; background:#0000002e; }
+.quote strong { font-size:12px; color:var(--accent-ink); }
+.quote span { font-size:12px; color:var(--bubble-sub); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
 .reactions { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 3px; }
-.reactions button { padding:1px 7px; border-radius:11px; font-size:12px; line-height:19px; background:#00000038; border:1px solid transparent; }
-.reactions button.mine { border-color:#8fa0ff; background:#5865f24d; }
+.reactions button { padding:1px 7px; border-radius:999px; font-size:12px; line-height:19px; background:#00000038; border:1px solid transparent; }
+.reactions button.mine { border-color:var(--accent-ink); background:var(--accent-soft); }
 .media { margin:0 0 4px; max-width:100%; }
 .media-picture { display:block; padding:0; border-radius:8px; overflow:hidden; min-width:96px; min-height:72px; background:#0003; }
 .media-picture img { display:block; max-width:min(320px,100%); max-height:320px; object-fit:contain; }
 .media-picture img.preview { width:260px; filter:blur(6px); }
 .media-picture.sticker { background:none; min-width:0; min-height:0; }
 .media-picture.sticker img { max-width:140px; max-height:140px; }
-.media-play { display:flex; align-items:center; gap:10px; min-width:190px; padding:7px 10px 7px 7px; border-radius:9px; background:#0000002e; position:relative; text-align:left; }
+.media-play { display:flex; align-items:center; gap:10px; min-width:190px; padding:7px 10px 7px 7px; border-radius:8px; background:#0000002e; position:relative; text-align:left; }
 .media-icon { flex:none; display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:#ffffff26; }
 .media-icon svg { width:15px; height:15px; fill:currentColor; }
 .media-label { font-size:13px; }
@@ -31,36 +31,31 @@
 .media-play.video:has(img) .media-label { grid-area:1/1; z-index:1; align-self:end; justify-self:start; margin:6px 8px; padding:1px 6px; border-radius:6px; background:#000a; font-size:11px; }
 .media video { display:block; max-width:min(340px,100%); max-height:360px; border-radius:8px; background:#000; }
 .media audio { display:block; width:260px; max-width:100%; height:38px; }
-.media-file { display:flex; align-items:center; gap:10px; width:100%; min-width:210px; padding:8px 10px; border-radius:9px; background:#0000002e; text-align:left; }
+.media-file { display:flex; align-items:center; gap:10px; width:100%; min-width:210px; padding:8px 10px; border-radius:8px; background:#0000002e; text-align:left; }
 .media-file:hover, .media-play:hover { background:#00000047; }
 .media-file svg { flex:none; }
 .media-file-words { flex:1; min-width:0; display:grid; }
 .media-file-words strong { font-size:13px; font-weight:600; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.media-file-words small, .media-note { font-size:11px; color:#c3ccca; }
+.media-file-words small, .media-note { font-size:11px; color:var(--bubble-sub); }
 .media-note { display:block; padding:6px 2px; font-style:italic; }
-#message-menu { position:fixed; inset:auto; margin:0; padding:5px; min-width:150px; border-radius:9px; background:#24252a; border:1px solid var(--line); color:var(--ink); box-shadow:var(--shadow); }
-#message-menu > button { display:flex; align-items:center; gap:8px; width:100%; padding:7px 8px; text-align:left; border-radius:5px; }
-#message-menu > button svg { width:15px; height:15px; }
-#message-menu button:hover, #message-menu button:focus-visible { background:#444651; color:white; }
-#message-menu .danger-item { color:#ffaaa3; }
+#message-menu { position:fixed; inset:auto; margin:0; min-width:150px; }
+#message-menu .danger-item { color:var(--danger-ink); }
 .reaction-picker { display:flex; gap:2px; }
-.reaction-picker button { font-size:20px; width:36px; height:34px; border-radius:7px; }
-.reaction-picker button[aria-pressed=true] { background:#5865f24d; }
-#presence { flex:none; font-size:11px; color:#8fe0bd; }
-#reply-context { display:flex; align-items:center; gap:8px; margin:2px 0 6px; padding:5px 4px 5px 10px; border-left:3px solid #7fd8b8; border-radius:5px; background:var(--soft); }
+.reaction-picker button { font-size:20px; width:36px; height:34px; border-radius:6px; }
+.reaction-picker button[aria-pressed=true] { background:var(--accent-soft); }
+#presence { flex:none; font-size:11px; color:var(--ok-ink); }
+#reply-context { display:flex; align-items:center; gap:8px; margin:2px 0 6px; padding:5px 4px 5px 10px; border-left:3px solid var(--accent); }
 .context-words { flex:1; min-width:0; display:grid; }
-.context-words strong { font-size:12px; color:#9be3c8; }
+.context-words strong { font-size:12px; color:var(--accent-ink); }
 .context-words span { font-size:12px; color:var(--muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-#reply-context .icon-button, .attachment .icon-button { width:26px; height:26px; flex:none; }
-#reply-context svg, .attachment .icon-button svg { width:14px; height:14px; }
 #attachments { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 6px; max-height:132px; overflow:auto; }
-.attachment { display:flex; align-items:center; gap:8px; max-width:240px; padding:5px 4px 5px 6px; border-radius:8px; background:var(--soft); border:1px solid #494a51; }
+.attachment { display:flex; align-items:center; gap:8px; max-width:240px; padding:5px 4px 5px 6px; border-radius:8px; background:var(--soft); border:1px solid var(--line-strong); }
 .attachment img { width:34px; height:34px; border-radius:5px; object-fit:cover; flex:none; }
 .attachment > svg { flex:none; color:var(--muted); }
 .attachment-words { min-width:0; display:grid; }
 .attachment-words strong { font-size:12px; font-weight:600; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .attachment-words small { font-size:11px; color:var(--muted); }
-.reader.dropping::after { content:"松开即可添加附件"; position:absolute; inset:8px; z-index:5; display:grid; place-items:center; border:2px dashed var(--ring); border-radius:14px; background:#2b2c31d9; font-size:16px; font-weight:600; pointer-events:none; }
-#media-viewer { width:auto; max-width:92vw; padding:14px; }
+.reader.dropping::after { content:"松开即可添加附件"; position:absolute; inset:8px; z-index:5; display:grid; place-items:center; border:2px dashed var(--ring); border-radius:12px; background:color-mix(in srgb,var(--content) 85%,transparent); font-size:15px; font-weight:600; pointer-events:none; }
+#media-viewer { width:auto; max-width:92vw; }
 #viewer-image { display:block; max-width:min(88vw,1100px); max-height:76vh; object-fit:contain; border-radius:8px; }
 #media-viewer footer { margin-top:12px; }

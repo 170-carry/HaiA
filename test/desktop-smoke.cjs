@@ -2,6 +2,7 @@ process.env.HAIA_TEST = '1';
 const { app, BrowserWindow, webContents, Notification, session } = require('electron');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
+const {showTestWindow,completeTest}=require('./desktop-visibility.cjs');
 const dir = process.argv[2], phase = process.argv[3];
 if (!dir || !['first','restart'].includes(phase)) throw new Error('需要临时测试目录和阶段');
 app.setPath('userData', dir);
@@ -38,6 +39,7 @@ async function until(fn) {
   await app.whenReady();
   const shell = await until(() => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:'))?.webContents);
   await until(() => shell.getURL().startsWith('file:'));
+  await showTestWindow(shell);
   const call = (name,...args) => shell.executeJavaScript('window.desk.'+name+'(...'+JSON.stringify(args)+')');
   if (phase === 'first') {
     if (process.env.RELAY_UI_CAPTURE) {
@@ -295,6 +297,7 @@ async function until(fn) {
     assert.deepEqual(await ui("[...get('bubbles').querySelectorAll('.message-text')].filter(n=>n.textContent.startsWith('恢复的')).map(n=>n.textContent)"),['恢复的第一条','恢复的第二条']);
     const G='fixture@g.us', me=accounts[0].id, pixel='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     await call('sendFile',me,G,{name:'样品.png',data:pixel,caption:'样品照片'});
+    await showTestWindow(shell,'.media-picture');
     try { await until(()=>ui("(()=>{const img=document.querySelector('.media-picture img');return !!img && img.naturalWidth===1 && !img.classList.contains('preview');})()")); }
     catch(error){throw Error(error.message+' '+await ui("JSON.stringify({image:document.querySelector('.media-picture')?.outerHTML,warning:get('warning').textContent})"));}
     const photo=(await call('state')).messages.find(m=>m.media?.kind==='image');
@@ -335,7 +338,7 @@ async function until(fn) {
     await until(()=>ui("!get('remark-dialog').open && get('reader-title').textContent==='老客户 · 林' && !get('reader-phone').hidden && get('reader-phone').textContent==='+6581234567'"));
     assert.equal(await ui("document.querySelector('.row.current strong').textContent"),'老客户 · 林');
     assert.equal(await ui("get('profile-details').querySelector('.detail-value').textContent"),'老客户 · 林');
-    assert.ok(await ui("['个性签名','商家简介','共同群组 · 1','~Jiamin'].every(t=>get('profile-details').textContent.includes(t))"));
+    assert.ok(await ui("['个性签名','商家简介','共同群组 · 1','~Jiamin'].every(t=>get('profile-extra').textContent.includes(t))"));
     await ui("get('profile-details').querySelector('.switch-row').click()");
     await until(()=>ui("get('profile-details').querySelector('.switch-row').getAttribute('aria-checked')==='true'"));
     assert.equal((await call('contactInfo',me,'demo@c.us')).muted,true);
@@ -881,5 +884,6 @@ async function until(fn) {
     console.log('PASS: persisted partitions reopened independently after process restart');
   }
   await Promise.all([a.session.flushStorageData(),b.session.flushStorageData()]);
+  completeTest();
   BrowserWindow.fromWebContents(shell).close();
 })().catch(err=>{console.error(err);app.exit(1);});

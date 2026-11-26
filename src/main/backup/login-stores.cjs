@@ -2,13 +2,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const {BrowserWindow,session,MessageChannelMain}=require('electron');
 const {acceptSnapshot,sendSnapshot}=require('./login-frame.cjs');
-const allowed={
-  'wawc':['user','ps_meta','ps_tokens'],
-  'signal-storage':null,
-  'wawc_db_enc':null,
-  'model-storage':['account-linking','acs-tokens','device-list','direct-connection-keys','sync-keys','coexv2-bot-secret'],
-  'worker-storage':['local_storage']
-};
+const {allowed,filters}=require('./login-store-policy.cjs');
 const stores=['IndexedDB','Local Storage'];
 async function copyStores(source,target) {
   await fs.mkdir(target,{recursive:true,mode:0o700});
@@ -34,7 +28,7 @@ async function authSnapshot(source,target,temp) {
     const {port1,port2}=new MessageChannelMain();
     window.webContents.postMessage('haia-snapshot-port',null,[port1]);
     destination.webContents.postMessage('haia-snapshot-port',null,[port2]);
-    await window.webContents.executeJavaScript('('+sendSnapshot.toString()+')('+JSON.stringify(allowed)+')');
+    await window.webContents.executeJavaScript('('+sendSnapshot.toString()+')('+JSON.stringify(allowed)+','+JSON.stringify(filters)+')');
     await clean.flushStorageData();
   }finally{window.destroy();destination.destroy();isolated.protocol.unhandle('https');clean.protocol.unhandle('https');}
 }

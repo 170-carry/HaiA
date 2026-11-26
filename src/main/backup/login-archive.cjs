@@ -7,7 +7,7 @@ const tar=require('tar');
 const path=require('node:path');
 const {password}=require('./package.cjs');
 const legacy=Buffer.from('HaiA-login-v1\n'), magic=Buffer.from('HaiA-login-v2\n');
-const entryName=/^(manifest\.json|[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}(\/|\/(IndexedDB|Local Storage)(\/[\w .@()+=,~-]+)*\/?))$/i;
+const entryName=/^(manifest\.json|[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}(\/|\/cookies\.json|\/(IndexedDB|Local Storage)(\/[\w .@()+=,~-]+)*\/?))$/i;
 async function version(file) {
   const handle=await fsp.open(file,'r');
   try {const head=Buffer.alloc(magic.length);await handle.read(head,0,head.length,0);return head.equals(magic)?2:head.equals(legacy)?1:0;}
