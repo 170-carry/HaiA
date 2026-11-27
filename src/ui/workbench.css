@@ -151,3 +151,6 @@ body.translate-compact .message-body.translated.show-original .translation-outpu
 #own-blocked-rows { max-height:150px; overflow:auto; }
 #dock-profile { padding:0; border-radius:50%; flex:none; }
 #dock-profile:hover .dock-icon { outline:2px solid var(--ring); outline-offset:1px; }
+
+#local-data-path { overflow-wrap:anywhere; user-select:text; }
+#open-data-folder { flex-shrink:0; }

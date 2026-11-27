@@ -19,7 +19,7 @@ if(process.env.HAIA_LIVE_NO_SANDBOX==='1')app.commandLine.appendSwitch('no-sandb
 dialog.showErrorBox=(title,message)=>{console.error('LIVE_APP_ERROR '+title+': '+message);app.exit(1);};
 dialog.showSaveDialog=async()=>({filePath:file});dialog.showOpenDialog=async()=>({filePaths:[file]});
 require('../src/main/app.cjs');
-const report={phase,startedAt:new Date().toISOString(),host:{platform:process.platform,arch:process.arch,
+const report={phase,appVersion:require('../package.json').version,startedAt:new Date().toISOString(),host:{platform:process.platform,arch:process.arch,
   electron:process.versions.electron,chrome:process.versions.chrome},network:'real',passwordSupplied:false,pairingRequested:false,samples:[]};
 const save=()=>fs.writeFileSync(path.join(folder,phase+'-report.json'),JSON.stringify(report,null,2),{mode:0o600});
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -39,6 +39,7 @@ const browser=(id)=>webContents.getAllWebContents().find(w=>!w.isDestroyed()&&w.
     baseline=JSON.parse(fs.readFileSync(baselinePath,'utf8'));
     if(phase==='import'){
       const current=await call('window.desk.state()');
+      report.emptyBeforeImport=current.accounts.length===0;
       if(current.accounts.length)throw Error('Target profile must be empty for first import');
       const result=await call('window.desk.backupImport()');
       if(result?.needsPassword)throw Error('Unexpected password request');
@@ -55,7 +56,7 @@ const browser=(id)=>webContents.getAllWebContents().find(w=>!w.isDestroyed()&&w.
     const page=browser(id);
     const result=page?await page.executeJavaScript('('+inspect.toString()+')('+JSON.stringify(salt)+',false)').catch(error=>({probeError:error.message.slice(0,120)})):{};
     report.samples.push({seconds:elapsed,status:account?.status,...result});save();
-    if(account?.status==='online'&&result.authenticated&&result.online){connected=true;break;}
+    if(account?.status==='online'&&result.authenticated&&result.online&&result.transport?.state==='CONNECTED'&&result.stream?.mode==='MAIN'){connected=true;break;}
     if(account?.status==='pair'&&elapsed>=30)throw Error('Import reached the QR/pairing screen');
     if(elapsed%15===0)console.log('LIVE_STATE '+JSON.stringify({phase,seconds:elapsed,status:account?.status,...result}));
     await sleep(3000);
@@ -66,6 +67,11 @@ const browser=(id)=>webContents.getAllWebContents().find(w=>!w.isDestroyed()&&w.
   report.identity=await browser(id).executeJavaScript('('+inspect.toString()+')('+JSON.stringify(salt)+',true,'+JSON.stringify(expectedText)+')');
   if(!source && process.env.HAIA_LIVE_AUTH_ONLY==='1'){
     if(report.identity.identityHash!==baseline.identityHash)throw Error('Imported account identity does not match source');
+    report.archiveSha256=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    if(process.env.HAIA_LIVE_CAPTURE_AUTH==='1'){
+      BrowserWindow.fromWebContents(ui).show();BrowserWindow.fromWebContents(ui).focus();
+      await sleep(500);fs.writeFileSync(path.join(folder,phase+'-connected.png'),(await ui.capturePage()).toPNG(),{mode:0o600});
+    }
     report.scope='authentication-only';report.passed=true;report.completedAt=new Date().toISOString();save();console.log('AUTHENTICATION_ONLY_PASS '+phase);await finish(0);return;
   }
   if(source){

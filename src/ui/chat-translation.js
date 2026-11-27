@@ -32,7 +32,7 @@ const chatTranslation = (() => {
     entries.set(slot.key,{pending:true});
     draw(slot);
     try {
-      const result = await window.desk.translate(slot.source,'incoming');
+      const result = await window.desk.translate(slot.source,'incoming',slot.ref);
       if (version === generation) entries.set(slot.key,result);
     } catch (e) {
       if (version === generation) entries.set(slot.key,{error:translationError(e)});
@@ -61,7 +61,7 @@ const chatTranslation = (() => {
     const button = el('button','message-translate','翻译'), output = el('div','translation-output');
     button.type = 'button'; output.dir = 'auto';
     const key = JSON.stringify([message.accountId,message.chat,message.id,message.text]);
-    const slot = {bubble,button,output,key,source:message.text,auto:!message.outgoing,visible:false,hidden:false};
+    const slot = {bubble,button,output,key,source:message.text,ref:{accountId:message.accountId,chat:message.chat,id:message.id},auto:!message.outgoing,visible:false,hidden:false};
     output.onclick = () => { if (document.body.classList.contains('translate-compact')) bubble.classList.toggle('show-original'); };
     observed.set(button,slot);
     draw(slot);

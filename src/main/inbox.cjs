@@ -25,7 +25,24 @@ function pollOf(item) {
   if (!item || !Array.isArray(item.options)) return null;
   return {name:text(item.name,300), options:item.options.slice(0,12).map(o=>text(o,120)), votes:votesOf(item.votes)};
 }
-// Message text stays in memory. WhatsApp itself owns the on-disk history.
+function applyChange(message, change) {
+  if (change.revoked === true) {
+    delete message.originalText;
+    delete message.localAttachment;
+    Object.assign(message,{type:'revoked',text:'消息已撤回',media:null,quote:null,link:null,poll:null,starred:false,reactions:[],translatable:false,edited:false});
+    return true;
+  }
+  if (Array.isArray(change.reactions)) message.reactions = reactionsOf(change.reactions);
+  if (Array.isArray(change.votes) && message.poll) message.poll = {...message.poll,votes:votesOf(change.votes)};
+  if (typeof change.starred === 'boolean') message.starred = change.starred;
+  if (typeof change.text === 'string' && change.text.trim() && message.type !== 'revoked') {
+    message.text = change.text;
+    delete message.originalText;
+    message.edited = true;
+  }
+  return true;
+}
+// Bounded working set for the live inbox.
 class Inbox {
   conversations = new Conversations();
   byAccount = new Map();
@@ -92,19 +109,21 @@ class Inbox {
         continue;
       }
       const message = { id: item.id, chat: item.chat, time: item.time, title: String(item.title).slice(0, 160),
-        senderId:typeof item.senderId === 'string' ? item.senderId : null, sender: String(item.sender || '').slice(0,160), text: item.text.slice(0, 65536), outgoing: Boolean(item.outgoing), pendingText: Boolean(item.pendingText), accountId };
+        senderId:typeof item.senderId === 'string' ? item.senderId : null, sender: String(item.sender || '').slice(0,160), text: item.text, outgoing: Boolean(item.outgoing), pendingText: Boolean(item.pendingText), accountId };
+      if (typeof item.originalText==='string' && item.originalText!==message.text) message.originalText=item.originalText;
       message.sequence = previous?.sequence ?? bucket.size;
       message.rowId = Number.isSafeInteger(item.rowId) ? item.rowId : previous?.rowId ?? null;
       message.type = typeof item.type === 'string' ? item.type.slice(0,80) : '';
       message.subtype = typeof item.subtype === 'string' ? item.subtype.slice(0,80) : '';
       message.system = !!item.system;
+      message.previewable = item.previewable !== false;
       message.translatable = item.translatable === true;
       message.ack = previous?.ack ?? null;
       message.media = mediaOf(item.media);
       message.quote = quoteOf(item.quote);
       message.edited = item.edited === true;
       message.forwarded = item.forwarded === true;
-      message.reactions = previous?.reactions || [];
+      message.reactions = item.reactions ? reactionsOf(item.reactions) : previous?.reactions || [];
       message.link = linkOf(item.link);
       message.poll = pollOf(item.poll);
       message.starred = item.starred === true;
@@ -134,18 +153,7 @@ class Inbox {
       this.chatIds(accountId,message.chat)?.delete(id);
       return true;
     }
-    if (change.revoked === true) {
-      Object.assign(message,{type:'revoked',text:'消息已撤回',media:null,quote:null,link:null,poll:null,starred:false,reactions:[],translatable:false,edited:false});
-      return true;
-    }
-    if (Array.isArray(change.reactions)) message.reactions = reactionsOf(change.reactions);
-    if (Array.isArray(change.votes) && message.poll) message.poll.votes = votesOf(change.votes);
-    if (typeof change.starred === 'boolean') message.starred = change.starred;
-    if (typeof change.text === 'string' && change.text.trim() && message.type !== 'revoked') {
-      message.text = change.text.slice(0,65536);
-      message.edited = true;
-    }
-    return true;
+    return applyChange(message,change);
   }
   find(accountId, id) { return this.byAccount.get(accountId)?.get(id); }
   clear(accountId) { this.early.delete(accountId); this.byAccount.delete(accountId); this.byChat.delete(accountId); this.conversations.clear(accountId); }
@@ -161,4 +169,4 @@ class Inbox {
 }
 Inbox.chatLimit = 1500;
 Inbox.accountLimit = 30000;
-module.exports = { Inbox };
+module.exports = { Inbox, applyChange };

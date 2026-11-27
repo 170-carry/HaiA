@@ -1,6 +1,7 @@
 const { Notification, shell, systemPreferences, app, powerMonitor } = require('electron');
-const { Inbox } = require('./inbox.cjs');
-const { WebAccount } = require('./web-account.cjs');
+const { HistoryInbox } = require('./history/inbox.cjs');
+const history = require('./history/account.cjs');
+const {detail}=require('./history/details.cjs');
 const media = require('./media.cjs');
 const accountHealth = require('./account-health/state.cjs');
 
@@ -12,7 +13,7 @@ class Workspace {
     this.win = win;
     this.accounts = accounts;
     this.sessions = new Map();
-    this.inbox = new Inbox();
+    this.inbox = new HistoryInbox(require('node:path').dirname(accounts.file));
     this.notices = new Map();
     this.people = new Map();
     this.active = null;
@@ -24,6 +25,7 @@ class Workspace {
     this.limit = 100;
     this.thread = null;
     this.epoch = 0;
+    require('./history/reassignment.cjs').finishInterrupted(accounts,this.inbox.root);
     for (const account of accounts.items) this.attach(account);
     // After sleep the pages are usually stale; accounts that are not online are loaded again at once.
     powerMonitor.on('resume', () => { for (const s of this.sessions.values()) if (!['online','pair'].includes(s.status) && !accountHealth.effectiveRestriction(s.account,s)) s.load(); });
@@ -32,13 +34,17 @@ class Workspace {
 
   }
   attach(account) {
-    const session = new WebAccount(account, (s, batch) => this.receive(s, batch));
-    this.sessions.set(account.id, session);
+    history.attach(this,account);
   }
   // The page shown in the reader. Updates pushed to the window carry each preview image once per opened thread.
   threadPage(feed, deliver) {
     if (!this.thread) return feed;
-    const page = this.inbox.page(this.limit, this.active, this.thread.chat);
+    const session = this.sessions.get(this.active);
+    const page = session.historyStore.page(this.thread.chat,this.limit);
+    if (session.status==='online') {
+      for (const id of this.inbox.chatIds(this.active,this.thread.chat) || [])
+        if (this.inbox.find(this.active,id)?.pendingText) page.missingCount++;
+    }
     if (this.searchAnchor?.epoch === this.epoch && !page.messages.some(m=>m.id===this.searchAnchor.id)) {
       page.messages.push(this.searchAnchor);
       page.messages.sort((a,b)=>b.time-a.time);
@@ -59,7 +65,7 @@ class Workspace {
     return { link: this.sessions.get(this.active)?.link || null, feedScope: this.feedScope, feed: this.thread ? feed : null, feedMore, feedFilter:this.filter, feedKind:this.kind, archivedCount:this.inbox.conversations.archivedCount(this.feedScope), calls:this.calls(), active: this.active, thread: this.thread && {...this.thread, presence:this.sessions.get(this.active)?.presence?.get(this.thread.chat) || null}, qr: this.sessions.get(this.active)?.qr || '', accounts: this.accounts.items.map(a => {
       const s = this.sessions.get(a.id);
       const phone = s?.status === 'online' && /^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/.exec(s.identity || '');
-      return { ...a, photoIdentity:s?.status === 'online' ? s.identity : null, linkedPhone:phone ? '+' + phone[1] : '', status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError, restriction:accountHealth.effectiveRestriction(a,s), accountHealth:accountHealth.classification(a,s), historySync: s?.historySync || null };
+      return { ...a, photoIdentity:s?.identity || (a.dropped ? a.id : null), linkedPhone:phone ? '+' + phone[1] : a.phone ? '+'+a.phone : '', storageError:!!s?.storageError, recoveryError:!!s?.recoveryError, status: s?.status || 'loading', unread: s?.unread || 0, historyError: !!s?.historyError, restriction:accountHealth.effectiveRestriction(a,s), accountHealth:accountHealth.classification(a,s), historySync: s?.historySync || null };
     }), ...this.threadPage(feed, deliver), more: this.thread ? this.thread.more : this.sources().some(s => s.more) };
   }
   publish() {
@@ -95,13 +101,8 @@ class Workspace {
     const query = String(term ?? '').trim().toLocaleLowerCase();
     if (!starred && query.length < 2) return [];
     const rows = [];
-    for (const [accountId, bucket] of this.inbox.byAccount) {
-      if (scope && scope !== accountId) continue;
-      for (const m of bucket.values()) {
-        if ((chat && m.chat !== chat) || m.system || m.pendingText || m.type === 'revoked' || (starred ? !m.starred : !m.text.toLocaleLowerCase().includes(query))) continue;
-        if (starred && query && !m.text.toLocaleLowerCase().includes(query)) continue;
-        rows.push(m);
-      }
+    for (const session of this.sessions.values()) {
+      if (!scope || scope===session.account.id) rows.push(...session.historyStore.search(query,starred,chat));
     }
     rows.sort((a,b) => b.time - a.time);
     return rows.slice(0,80).map(m => {
@@ -112,7 +113,7 @@ class Workspace {
   }
   messageInfo(accountId, chat, id) {
     const {session,message} = this.current(accountId,chat,id);
-    return session.call('messageInfo', message.id, message.outgoing);
+    return detail(session,'messageInfo',message.id,message.outgoing);
   }
   async setEphemeral(accountId, chat, seconds) {
     this.current(accountId,chat);
@@ -135,20 +136,24 @@ class Workspace {
     const link = batch.status === 'pair' ? batch.link || null : null;
     const linkChanged = s.link?.code !== link?.code || s.link?.state !== link?.state;
     const changed = linkChanged || !!batch.chatUnread || s.unread !== (batch.unread || 0) || s.qr !== (batch.qr || '') || s.status !== batch.status || s.more !== !!batch.more || s.historyError !== !!batch.historyError;
-    if (batch.identity && s.identity && s.identity !== batch.identity) {
-      this.inbox.clear(id);
+    history.finish(this,s,batch.lastBatch);
+    if (history.isolate(this,s,batch.identity)) {
       this.people.delete(id);
       if (this.active === id && this.thread) this.select(this.feedScope);
       this.clearNotices(id);
     }
+    this.inbox.mergeUnread(id,batch);
     if (batch.directory?.length) this.inbox.conversations.index(id,batch.directory);
     s.link = link;
     if (batch.chatUnread) this.inbox.conversations.setUnread(id, batch.chatUnread);
     s.identity = batch.identity || s.identity;
     let receiptLate = false;
     s.qr = batch.qr || '';
+    if (s.status==='online' && batch.status!=='online') s.historyRetry=0;
     s.status = batch.status;
-    s.unread = batch.unread || 0;
+    if (batch.status === 'online') s.unread=batch.unreadReady===false ? [...(this.inbox.conversations.unread.get(id)?.values() || [])].reduce((sum,n)=>sum+n,0) : batch.unread || 0;
+    else if (s.unread == null || batch.status==='pair') s.unread = [...(this.inbox.conversations.unread.get(id)?.values() || [])].reduce((sum,n)=>sum+n,0);
+    if (batch.recoveryError) s.recoveryError = true;
     s.more = !!batch.more;
     s.historyError = !!batch.historyError;
     const sync = batch.status === 'online' && batch.historySync ? {progress:Number.isFinite(batch.historySync.progress) ? batch.historySync.progress : null, paused:batch.historySync.paused === true} : null;
@@ -166,7 +171,12 @@ class Workspace {
       }
       receiptLate = true;
     }
-    const added = this.inbox.add(id, batch.messages);
+    history.record(this,s,batch);
+    if (batch.status !== 'online' && id === this.active && this.thread) {
+      clearTimeout(this.older);
+      Object.assign(this.thread,{more:false,waiting:false,phoneSilent:false});
+    }
+    const added = this.inbox.add(id, batch.status==='online'?batch.messages:[]);
     for (const { message, notify } of added) {
       // A message that lands in the conversation being read is marked read instead of raising a notification.
       const reading = this.watching(id, message.chat);
@@ -216,6 +226,7 @@ class Workspace {
       return true;
     }
     this.accounts.update(account.id,{dropped:{at:Date.now(),reason}});
+    s.historyStore.restore(this.inbox,account.id);
     const text = account.name + (account.phone ? '（+' + account.phone + '）' : '') + '的网页关联已断开，请打开账号状态查看。';
     if (!this.win.isDestroyed()) this.win.webContents.send('desk:warning', text);
     if (Notification.isSupported()) new Notification({title:'WhatsApp 账号异常退出', body:text}).show();
@@ -264,7 +275,7 @@ class Workspace {
     return this.active ? [this.sessions.get(this.active)].filter(Boolean) : [...this.sessions.values()];
   }
   async openMessage(accountId, id) {
-    const msg = this.inbox.find(accountId, id);
+    const msg = this.inbox.find(accountId,id) || this.sessions.get(accountId)?.historyStore.row(id);
     if (!msg) return;
     return this.openChat(accountId,msg.chat);
   }
@@ -310,10 +321,12 @@ class Workspace {
     thread.loading = true;
     this.publish();
     try {
-      const result = await this.sessions.get(this.active).call('thread', thread.chat, thread.before, retry);
+      const session=this.sessions.get(this.active), identity=session.identity;
+      const result = await session.call('thread', thread.chat, thread.before, retry);
+      if (session.disposed || session.identity!==identity || session.status!=='online') return;
+      const fresh = result.rows.filter(row => !this.inbox.find(session.account.id,row.id)).length;
+      this.inbox.add(session.account.id,result.rows,'web-history');
       if (this.epoch !== epoch) return;
-      const fresh = result.rows.filter(row => !this.inbox.find(this.active,row.id)).length;
-      this.inbox.add(this.active, result.rows);
       const oldest = result.rows.reduce((best, row) => !best || row.time < best.time ? row : best, null);
       const advanced = !!oldest && oldest.id !== thread.before;
       thread.before = oldest?.id || thread.before;
@@ -336,7 +349,7 @@ class Workspace {
     const session = this.sessions.get(accountId);
     if (accountId !== this.active || chat !== this.thread?.chat || !session) throw new Error('请确认账号和对话');
     if (id === undefined) return {session};
-    const message = this.inbox.find(accountId,id);
+    const message = session.historyStore.row(id) || this.inbox.find(accountId,id);
     if (!message || message.chat !== chat || message.system) throw new Error('消息不存在');
     return {session,message};
   }
@@ -345,16 +358,17 @@ class Workspace {
     const session = this.online(accountId);
     if (typeof chat !== 'string' || !(this.inbox.conversations.find(accountId,chat) || this.people.get(accountId)?.get(chat))) throw new Error('会话不存在，请重新打开对话');
     if (!quote) return {session,quoted:null};
-    const message = this.inbox.find(accountId,quote);
+    const message = session.historyStore.row(quote) || this.inbox.find(accountId,quote);
     if (!message || message.chat !== chat || message.system) throw new Error('被引用的消息不存在');
     return {session,quoted:message.id};
   }
   async deliver(session, accountId, work) {
-    const identity = session.identity;
+    const identity=session.identity,store=session.historyStore;
     const message = await work();
-    if (!session.disposed && session.identity === identity && session.status === 'online') {
-      this.inbox.add(accountId, [message]);
+    if (!session.disposed && session.identity === identity && session.historyStore===store) {
+      this.inbox.add(accountId,[message],'send-result');
       this.publish();
+      return store.row(message.id);
     }
   }
   async send(accountId, chat, text, quote = null, mentions = []) {
@@ -369,7 +383,8 @@ class Workspace {
         file.data.length > 28000000) throw new Error('无法发送此内容，粘贴的图片和录音不能超过 20 MB');
     const item = {voice:file.voice === true, mentions:file.mentions, data:file.data, name:String(file.name || '文件').replace(/[\\/\x00-\x1f]/g,'_').slice(0,200),
       caption:typeof file.caption === 'string' ? file.caption.slice(0,65536) : '', quote:quoted};
-    await this.deliver(session,accountId,() => session.call('sendFile', chat, item));
+    const bytes=Buffer.from(item.data.slice(item.data.indexOf(',')+1),'base64');
+    await require('./history/outgoing-files.cjs').send(this,session,bytes,()=>session.call('sendFile',chat,item));
   }
   // A file chosen from disk is read here and streamed to WhatsApp in pieces.
   async sendPath(accountId, chat, filePath, meta) {
@@ -377,7 +392,7 @@ class Workspace {
     if (typeof filePath !== 'string' || !filePath) throw new Error('无法读取这个文件');
     const caption = typeof meta?.caption === 'string' ? meta.caption.slice(0,65536) : '';
     const report = (name, sent, total) => { if (!this.win.isDestroyed()) this.win.webContents.send('desk:progress',{accountId,chat,name,sent,total}); };
-    try { await this.deliver(session,accountId,() => media.upload(session,chat,filePath,{caption,quote:quoted,mentions:meta?.mentions},report)); }
+    try { await require('./history/outgoing-files.cjs').send(this,session,filePath,staged=>media.upload(session,chat,staged,{name:require('node:path').basename(filePath),caption,quote:quoted,mentions:meta?.mentions},report)); }
     finally { report('',0,0); }
   }
   media(accountId, chat, id) {
@@ -458,7 +473,7 @@ class Workspace {
     await session.call('star', message.id, on === true);
   }
   chatLabels(accountId, chat) {
-    return this.current(accountId,chat).session.call('chatLabels', chat);
+    return detail(this.current(accountId,chat).session,'chatLabels',chat);
   }
   async setLabel(accountId, chat, labelId, on, name) {
     const {session} = this.current(accountId,chat);
@@ -522,7 +537,7 @@ class Workspace {
     }
     await this.openChat(accountId,chat);
   }
-  profileInfo(accountId) { return this.online(accountId).call('profileInfo'); }
+  profileInfo(accountId) { const s=this.sessions.get(accountId);if(!s) throw Error('账号不存在');return detail(s,'profileInfo'); }
   // Changes the account's own WhatsApp profile, privacy or block list, or the label this app shows for it.
   async saveProfile(accountId, field, value) {
     if (field === 'label') {
@@ -545,7 +560,7 @@ class Workspace {
     await session.call('profileSave', field, payload);
   }
   contactInfo(accountId, chat) {
-    return this.current(accountId,chat).session.call('contactInfo', chat);
+    return detail(this.current(accountId,chat).session,'contactInfo',chat);
   }
   async saveRemark(accountId, chat, name) {
     const {session} = this.current(accountId,chat);
@@ -554,6 +569,7 @@ class Workspace {
     const title = String(await session.call('renameContact', chat, name.trim()) || '').slice(0,160);
     if (!title || session.disposed || session.identity !== identity) return;
     this.inbox.conversations.retitle(accountId,chat,title);
+    session.historyStore.flag(chat,{title});
     for (const message of this.inbox.byAccount.get(accountId)?.values() || []) if (message.chat === chat) message.title = title;
     const person = this.people.get(accountId)?.get(chat);
     if (person) person.title = title;
@@ -567,6 +583,7 @@ class Workspace {
     const result = await session.call('requestReview', chat);
     const flags = this.inbox.conversations.flags.get(accountId)?.get(chat);
     if (flags) flags.state = 'review';
+    session.historyStore.flag(chat,{state:'review'});
     this.publish();
     return {state:'review', at:Number(result?.at) || Date.now()};
   }
@@ -576,7 +593,7 @@ class Workspace {
     if (typeof chat !== 'string' || !this.inbox.conversations.find(accountId,chat)) throw new Error('会话不存在');
     if (!['muted','pinned','archived','blocked','unread'].includes(key) || (key === 'blocked' && chat.endsWith('@g.us'))) throw new Error('无法修改此设置');
     await session.call('chatSetting', chat, key, value === true);
-    if (['muted','pinned','archived'].includes(key)) { this.inbox.conversations.setFlag(accountId,chat,key,value === true); this.publish(); }
+    if (['muted','pinned','archived'].includes(key)) { this.inbox.conversations.setFlag(accountId,chat,key,value === true); session.historyStore.flag(chat,{[key]:value===true}); this.publish(); }
   }
   async typing(accountId, chat, active) {
     const {session} = this.current(accountId,chat);
@@ -596,8 +613,9 @@ class Workspace {
     this.inbox.clear(id);
     this.clearNotices(id);
     try {
-      await s.ses.clearData();
+      if (s.ses) await s.ses.clearData();
       this.accounts.remove(id);
+      this.inbox.discard(id);
       this.sessions.delete(id);
     } catch (err) {
       this.attach(s.account);
@@ -605,7 +623,12 @@ class Workspace {
     } finally { this.publish(); }
   }
   async more() {
-    if (this.thread) return this.readThread(true);
+    if (this.thread) {
+      this.limit+=100;
+      this.publish();
+      if (this.sessions.get(this.active)?.status==='online' && this.thread.more) return this.readThread(true);
+      return;
+    }
     await this.moreFeed();
   }
   feedSources() {
@@ -639,6 +662,7 @@ class Workspace {
       this.clearNotices(session.account.id);
       session.close();
     }
+    this.inbox.close();
   }
 }
 module.exports = { Workspace };

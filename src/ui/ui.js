@@ -2,7 +2,14 @@ const get = id => document.getElementById(id);
 const api = window.desk;
 const statusText = {loading:'连接中',syncing:'同步中',online:'已连接',pair:'待关联',offline:'连接失败','adapter-error':'消息接口异常'};
 const drafts = new Map(), sending = new Set();
-let state, route, timer;
+let state, route, timer, pairingAccount = null;
+const composerKey=(id,chat)=>JSON.stringify([state?.accounts.find(a=>a.id===id)?.draftId || id,chat]);
+const snapshotOf = account => !!account?.dropped && account.status!=='online';
+function showPairing(account) {
+  pairingAccount=account.id;
+  return run(async()=>{await api.select(account.id);if(state?.active===account.id) render(state);});
+}
+get('snapshot-relink').onclick = ()=>{const owner=state?.accounts.find(a=>a.id===state.active);if(owner)showPairing(owner);};
 function warning(message) {
   get('warning').textContent = message; get('warning').hidden = false;
   clearTimeout(timer); timer = setTimeout(()=>get('warning').hidden=true,6500);
@@ -26,11 +33,27 @@ function unchanged(part, value) {
 function openMessage(m) { return run(()=>api.openChat(m.accountId,m.chat)); }
 function render(s) {
   const previous = state;
+  for(const account of previous?.accounts || []) if(!s.accounts.some(a=>a.id===account.id)) {
+    const draftId=account.draftId || account.id;
+    if (route && JSON.parse(route)[0]===draftId) get('reply').value='';
+    for(const key of drafts.keys()) if(key.startsWith('['+JSON.stringify(draftId)+',')) drafts.delete(key);
+    mentionDrafts.forget(draftId);
+    void composerDisk.removeAccount(draftId).catch(()=>warning('清理本机草稿失败'));
+  }
   state = s;
   const owner = s.accounts.find(a => a.id === s.active);
+  const readOnly = snapshotOf(owner);
+  if (pairingAccount && (s.accounts.find(a=>a.id===pairingAccount)?.status==='online' || s.thread)) pairingAccount=null;
+  const banner=get('snapshot-banner');
+  banner.hidden=!readOnly && !owner?.recoveryError && !owner?.storageError;
+  get('snapshot-note').textContent=(readOnly ? 'WhatsApp 已异常退出 · 聊天记录只读，无法收发新消息。' : '') +
+    (owner?.recoveryError ? ' 本地历史回溯未完成，下次启动会重试。' : '') +
+    (owner?.storageError ? ' 本地写入失败，正在重试。请检查磁盘空间和目录权限。' : '');
+  get('snapshot-relink').hidden=!readOnly || owner?.status!=='pair' || pairingAccount===owner?.id;
+  document.body.classList.toggle('snapshot-mode',readOnly);
   const scope = s.accounts.find(a => a.id === s.feedScope);
   const page = s.feed || s;
-  const current = JSON.stringify([s.active,s.thread?.chat]);
+  const current=composerKey(s.active,s.thread?.chat);
   const changed = route !== current;
   groupPanel.route(s.active,s.thread?.chat);
   const box = get('scroll'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
@@ -74,7 +97,7 @@ function render(s) {
   // Right after linking, WhatsApp keeps copying history from the phone for a while.
   const syncNote = account => account?.historySync ? '同步历史消息' + (account.historySync.progress != null ? ' ' + account.historySync.progress + '%' : '中') : '';
   const syncing = s.accounts.filter(account => account.historySync).length;
-  get('connections').textContent = scope ? [scope.linkedPhone,statusText[scope.status],syncNote(scope),accountHealth.limitNote(scope)].filter(Boolean).join(' · ') :
+  get('connections').textContent = scope ? [scope.linkedPhone,snapshotOf(scope) ? '异常退出' : statusText[scope.status],syncNote(scope),accountHealth.limitNote(scope)].filter(Boolean).join(' · ') :
     connected + ' / ' + s.accounts.length + ' 个账号已连接' + (syncing ? ' · ' + syncing + ' 个正在同步历史' : '');
   get('location').textContent = scope?.name || '全部账号';
   get('title').textContent = scope ? scope.name + ' · 私信' : '私信';
@@ -87,7 +110,8 @@ function render(s) {
   accountHealth.draw(s);
   callBar.render(s);
   const preview = !s.thread && page.messages[0];
-  const pair = owner?.status === 'pair', needsSetup = owner && owner.status !== 'online' && !s.thread;
+  const pair = owner?.status === 'pair' && (!readOnly || pairingAccount===owner.id) && !s.thread;
+  const needsSetup = owner && owner.status !== 'online' && !s.thread && (!readOnly || pair);
   const title = s.thread?.title || (needsSetup ? owner.name : preview?.title) || '私信';
   get('reader-title').textContent = title;
   get('group-label').hidden = !(s.thread?.chat || preview?.chat || '').endsWith('@g.us') || !!needsSetup;
@@ -99,7 +123,7 @@ function render(s) {
       needsSetup ? 'self' : s.thread?.chat || preview?.chat));
   }
   profilePanel.render(s.thread, owner, statusText, s.messages);
-  threadSearch.setThread(s.thread ? current : null);
+  threadSearch.setThread(s.thread ? JSON.stringify([s.active,s.thread.chat]) : null);
   get('empty').classList.toggle('setup', !!needsSetup);
   get('empty').hidden = !!s.thread;
   get('empty').classList.toggle('message-preview',!!preview && !needsSetup);
@@ -121,13 +145,13 @@ function render(s) {
   get('preview-open').hidden = !preview || !!needsSetup || waiting.length > 0;
   get('preview-open').onclick = preview ? ()=>openMessage(preview) : null;
   get('emptyTitle').textContent = pair ? '关联 WhatsApp 账号' : needsSetup ? statusText[owner.status] :
-    waiting.length ? '待回复的会话' : preview ? '最新消息' : '选择一条消息';
+    waiting.length ? (readOnly?'未读会话':'待回复的会话') : preview ? '最新消息' : '选择一条消息';
   get('help').textContent = pair ? '打开手机 WhatsApp，选择「已关联设备」→「关联设备」。' :
     needsSetup ? (['offline','adapter-error'].includes(owner.status) ? '右键点击左侧账号头像，选择「重新连接」。' : '正在准备此账号的会话。') :
-    waiting.length ? '共 '+countLabel(unread)+' 条未读，先处理最近的这些：' : preview ? preview.text : '从左侧列表打开对话，在这里阅读和回复。';
+    readOnly && !pair ? (preview?.text || '本机没有可预览的聊天记录。') : waiting.length ? '共 '+countLabel(unread)+' 条未读，先处理最近的这些：' : preview ? preview.text : '从左侧列表打开对话，在这里阅读和回复。';
   pairingPanel.render(pair ? owner.id : null, s.link, s.qr);
   const firstId = s.thread && s.messages.at(-1)?.id;
-  if (changed) { chatTranslation.resetView(); resetMessageRows(); messageMedia.reset(); get('bubbles').replaceChildren(); }
+  if (changed || snapshotOf(previous?.accounts.find(a=>a.id===previous.active))!==readOnly) { chatTranslation.resetView(); resetMessageRows(); messageMedia.reset(); get('bubbles').replaceChildren(); }
   const known = changed ? null : new Set((previous?.messages || []).map(m=>m.id));
   syncMessages(get('bubbles'), s.thread ? s.messages : [], owner, known, s.thread ? threadMarks.divider(s.messages) : null);
   chatTranslation.prune(); messageSelect.paint();
@@ -140,12 +164,12 @@ function render(s) {
   get('more').classList.toggle('phone-silent', !!s.thread?.phoneSilent && !s.thread?.waiting);
   get('chat-empty').hidden = !s.thread || Boolean(s.messages.length || s.missingCount);
   get('chat-empty').textContent = s.thread?.waiting ? '这段对话的消息还在手机上，正在请求同步，请保持手机联网…' : s.thread?.phoneSilent ? '这段对话的消息还在手机上，但手机没有响应。' : s.thread?.loading ? '正在加载聊天记录…' : '暂无已同步的消息';
-  get('composer').hidden = !s.thread;
+  get('composer').hidden = !s.thread || readOnly;
   get('reply').placeholder = '发送消息给 @' + title;
   get('replyLabel').textContent = '使用 ' + (owner?.name || '') + ' 回复';
   replyAccount.render(s,owner);
   get('send').disabled = !canSend(owner);
-  get('reply').disabled = sending.has(route);
+  get('reply').disabled = readOnly || sending.has(route);
   const presence = s.thread?.presence;
   get('presence').hidden = !presence?.state;
   get('presence').textContent = presence?.state === 'composing' ? (presence.who ? presence.who+' ' : '')+'正在输入…' :
@@ -213,16 +237,18 @@ get('composer').onsubmit = e=>{
         // The typed text travels as the caption of the first attachment.
         const outcome = await composerExtras.sendAll(account,chat,key,wire.text,quoted,wire.ids);
         if (outcome.error) {
-          if (outcome.done) { drafts.delete(key); if (route === key) { get('reply').value = ''; composerTools.reset(); } }
+          if (outcome.done) { drafts.delete(key);draftStore.persist(); if (route === key) { get('reply').value = ''; composerTools.reset(); } }
           throw outcome.error;
         }
       } else await api.send(account,chat,wire.text,quoted?.id || null,wire.ids);
       mentionDrafts.clear(key);
-      drafts.delete(key);if(route===key){get('reply').value='';composerTools.reset();composerExtras.clear();}
+      drafts.delete(key);draftStore.persist();if(route===key){get('reply').value='';composerTools.reset();composerExtras.clear();}
     } finally {sending.delete(key);render(state);if(route===key)get('reply').focus();}
   });
 };
-window.addEventListener('DOMContentLoaded',()=>{
+window.addEventListener('DOMContentLoaded',async()=>{
+  try {await Promise.all([draftStore.ready,mentionDrafts.ready]);}
+  catch {warning('读取本机草稿失败，请检查数据目录。');}
   api.onUpdate(render); api.onWarning(warning);
   run(async()=>{chatTranslation.configure(await api.translationSettings());if(state)render(state);});
   run(async()=>render(await api.state()));

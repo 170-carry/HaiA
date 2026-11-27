@@ -8,7 +8,7 @@ function renderRail(state, statuses, select) {
   const items = state.accounts.map(account => {
     const button = document.createElement('button');
     button.className = 'rail-button account' + (account.id === state.feedScope ? ' selected' : '');
-    const status = statuses[account.status] || account.status;
+    const status = snapshotOf(account) ? 'WhatsApp 已异常退出' : statuses[account.status] || account.status;
     button.title = [account.name, account.linkedPhone, status].filter(Boolean).join(' · ') + (account.unread ? ' · ' + account.unread + ' 条未读' : '');
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-pressed', String(account.id === state.feedScope));
@@ -38,7 +38,7 @@ function renderRail(state, statuses, select) {
     tile.className = 'tile ' + tones.get(account.id);
     tile.append(avatarPhotos.face(account.id,'self'));
     const dot = document.createElement('i');
-    dot.className = 'status-dot ' + account.status;
+    dot.className = 'status-dot ' + (snapshotOf(account)?'dropped':account.status);
     tile.append(dot);
     button.append(tile);
     if (account.unread > 0) {

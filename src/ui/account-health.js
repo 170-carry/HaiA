@@ -49,7 +49,7 @@ const accountHealth = (() => {
         item.append(watch);
       }
     }
-    if(account.restriction || account.dropped) {
+    if(!account.historyOnly && (account.restriction || account.dropped)) {
       const phone=el('button','health-action','读取手机审核状态');
       phone.onclick=()=>run(async()=>{phone.disabled=true;try{await api.readPhoneReview(account.id);}finally{phone.disabled=false;}});
       item.append(phone);
@@ -62,12 +62,12 @@ const accountHealth = (() => {
       inspect.onclick=()=>run(()=>api.inspectAccount(account.id));
       item.append(inspect);
     }
-    if (account.status !== 'online') {
+    if (account.status !== 'online' && !account.historyOnly) {
       const relink = account.status === 'pair';
       const action = el('button','health-action',relink ? (account.dropped ? '重新关联' : '去关联') : '重新连接');
       action.type = 'button';
       action.onclick = () => run(async () => {
-        if (relink) { dialog.close(); await api.select(account.id); }
+        if (relink) { dialog.close(); await showPairing(account); }
         else { action.disabled = true; await api.reload(account.id); }
       });
       item.append(action);

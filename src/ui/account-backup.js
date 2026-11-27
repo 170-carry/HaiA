@@ -79,7 +79,7 @@
         } else {
           // A file made by an earlier version holds chat records to read, not a login.
           for(const result of results) for(const [chat,text,mentions] of result.drafts) {
-            const key=JSON.stringify([result.account,chat]);
+            const key=composerKey(result.account,chat);
             if(drafts.has(key)) continue;
             drafts.set(key,text);
             for(const span of mentions || []) mentionDrafts.add(key,text,span.start,span.label,span.id);

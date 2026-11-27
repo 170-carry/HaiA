@@ -7,10 +7,10 @@ async function forwardMessage(desk, account, chat, id, to, destination = account
   if (destination === account) return source.call('forward',to,id);
   if (message.media) {
     const sourceIdentity = source.identity, targetIdentity = target.identity;
-    await desk.deliver(target,destination,async () => {
-      const file = await media.download(source,message);
+    const file = await media.download(source,message);
+    await require('./history/outgoing-files.cjs').send(desk,target,file.path,async staged => {
       if (source.disposed || target.disposed || source.identity !== sourceIdentity || target.identity !== targetIdentity || target.status !== 'online') throw new Error('账号连接已变更，请重新选择会话');
-      return media.upload(target,to,file.path,{name:file.name || message.media.name || '附件',mime:file.mime,
+      return media.upload(target,to,staged,{name:file.name || message.media.name || '附件',mime:file.mime,
         kind:message.media.kind, caption:message.media.caption ? message.text : ''});
     });
   } else if (['chat','text'].includes(message.type) && message.text) {

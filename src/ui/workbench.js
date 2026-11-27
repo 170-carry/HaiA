@@ -44,19 +44,27 @@ const threadMarks = (() => {
 
 // Drafts survive a restart and show in the conversation list.
 const draftStore = (() => {
-  let timer = null, version = 0;
-  try { for (const [key,text] of JSON.parse(localStorage.getItem('drafts') || '[]')) if (typeof text === 'string' && text) drafts.set(key,text); } catch { /* Start without saved drafts. */ }
+  let version = 0;
+  const saved=new Map();
+  const ready=composerDisk.load('text','drafts',drafts).then(()=>{for (const [key,value] of drafts) saved.set(key,value);});
   function persist() {
     version++;
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const kept = [...drafts].filter(([,text]) => text && text.trim()).slice(-200).map(([key,text]) => [key,text.slice(0,4000)]);
-      try { localStorage.setItem('drafts',JSON.stringify(kept)); } catch { /* Storage is full; drafts stay in memory. */ }
-    },400);
+    for(const key of new Set([...drafts.keys(),...saved.keys()])) {
+      const text=drafts.get(key) || null;
+      if (text===(saved.get(key) || null)) continue;
+      const previous=saved.get(key);
+      if(text) saved.set(key,text);else saved.delete(key);
+      composerDisk.put('text',key,text).catch(()=>{
+        if ((saved.get(key) || null)===text) {
+          if(previous) saved.set(key,previous); else saved.delete(key);
+        }
+        warning('本机草稿保存失败，请检查磁盘空间。');
+      });
+    }
   }
   get('reply').addEventListener('input',() => { if (route && !composerExtras.current().editing) { drafts.set(route,get('reply').value); persist(); } });
-  return {persist, get version() { return version; }, of(accountId, chat) {
-    const key = JSON.stringify([accountId,chat]);
+  return {persist,ready, get version() { return version; }, of(accountId, chat) {
+    const key=composerKey(accountId,chat);
     return key === route ? '' : (drafts.get(key) || '').trim();
   }};
 })();
@@ -266,6 +274,7 @@ const settingsExtras = (() => {
   function draw() {
     const values = preferences.all;
     for (const input of dialog.querySelectorAll('[data-pref]')) input.checked = values[input.dataset.pref] === true;
+    get('local-data-path').textContent=values.dataDirectory || '';
     get('settings-version').textContent = 'HaiA ' + (values.version || '');
     get('settings-muted').replaceChildren(...(state?.accounts.length > 1 ? [el('p','settings-note','不提醒以下账号的新消息：'),...state.accounts.map(account => {
       const row = el('label','settings-choice'), box = el('input');
@@ -285,6 +294,7 @@ const settingsExtras = (() => {
       row.append(words,remove); return row;
     }));
   }
+  get('open-data-folder').onclick=()=>run(()=>api.openDataDirectory());
   dialog.addEventListener('change',event => {
     const key = event.target.dataset?.pref;
     if (key) run(() => preferences.save({[key]:event.target.checked}));

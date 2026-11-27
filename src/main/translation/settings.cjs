@@ -36,7 +36,7 @@ class TranslationSettings {
     if (engine !== 'keyed' && !Object.hasOwn(freeNames,engine)) throw new Error('请选择翻译服务');
     if (engine==='keyed' && !Object.values(next.keys).some(Boolean)) throw new Error('请先配置至少一个翻译服务');
     Object.assign(next,{engine,auto:input.auto === true,incoming:input.incoming,draft:input.draft,region:String(input.region || '').trim().slice(0,80)});
-    fs.writeFileSync(this.file+'.tmp',JSON.stringify(next),{mode:0o600});
+    fs.writeFileSync(this.file+'.tmp',JSON.stringify(next),{mode:0o600,flush:true});
     fs.renameSync(this.file+'.tmp',this.file);
     return this.public();
   }
@@ -45,7 +45,7 @@ class TranslationSettings {
     if (value !== 'none' && !Object.hasOwn(languages,value)) throw new Error('请选择支持的目标语言');
     const next = this.read();
     next.voice = value;
-    fs.writeFileSync(this.file+'.tmp',JSON.stringify(next),{mode:0o600});
+    fs.writeFileSync(this.file+'.tmp',JSON.stringify(next),{mode:0o600,flush:true});
     fs.renameSync(this.file+'.tmp',this.file);
     return this.public();
   }

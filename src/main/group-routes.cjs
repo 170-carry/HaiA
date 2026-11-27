@@ -1,3 +1,4 @@
+const {detail}=require('./history/details.cjs');
 function groupRoutes(desk) {
   function session(id,chat) {
     if (id !== desk.active || chat !== desk.thread?.chat || typeof chat !== 'string' || !chat.endsWith('@g.us')) throw new Error('请重新打开群聊');
@@ -9,9 +10,10 @@ function groupRoutes(desk) {
       const rows=await source.call('listGroups');
       if (identity!==source.identity || source.disposed) throw new Error('账号已切换');
       desk.inbox.conversations.index(id,rows);
+      source.historyStore.directory(rows,true);
       return rows;
     },
-    groupInfo:(id,chat)=>session(id,chat).call('groupInfo',chat),
+    groupInfo:(id,chat)=>detail(session(id,chat),'groupInfo',chat),
     async groupMembers(id,chat,action,members) {
       const source=session(id,chat);
       const list=Array.isArray(members) ? [...new Set(members.map(m=>String(m).trim()))] : [];
@@ -34,6 +36,7 @@ function groupRoutes(desk) {
           (field === 'subject' && (!value.trim() || value.length>100)) || value.length>2048) throw new Error('请检查群资料的长度');
       await source.call('saveGroup',chat,field,value);
       if (field === 'subject' && !source.disposed && desk.active === id && desk.thread?.chat === chat) {
+        source.historyStore.flag(chat,{title:value});
         desk.thread.title=value;
         const entry=desk.inbox.conversations.find(id,chat);
         if (entry) entry.title=value;

@@ -91,7 +91,10 @@ const messageMedia = (() => {
     if (nodes.has(key)) return nodes.get(key);
     const media = message.media, box = el('div','media');
     if (media.once) box.append(el('span','media-note','一次性消息，请在手机上查看'));
-    else if (['image','sticker'].includes(media.kind)) picture(message,box);
+    else if (snapshotOf(state?.accounts.find(a=>a.id===message.accountId)) && !message.localAttachment) {
+      if (media.thumb) { const img=new Image(); img.src=media.thumb; img.alt='本地缩略图'; box.append(img); }
+      box.append(el('span','media-note',(media.name || labels[media.kind] || '附件')+' · 本机无原文件'));
+    } else if (['image','sticker'].includes(media.kind)) picture(message,box);
     else if (['video','ptt','audio'].includes(media.kind)) player(message,box);
     else {
       const button = el('button','media-file');

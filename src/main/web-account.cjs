@@ -22,7 +22,7 @@ function adapterSource() {
 }
 
 class WebAccount {
-  constructor(account, onBatch) {
+  constructor(account, onBatch, prepare) {
     this.account = account;
     this.status = 'loading';
     this.more = false;
@@ -74,6 +74,7 @@ class WebAccount {
     this.poll = setInterval(async () => {
       if (this.busy || this.disposed || wc.isDestroyed() || !trusted(wc.getURL())) return;
       const generation = this.generation;
+      if (!require('./history/write-errors.cjs').replay(this,onBatch)) return;
       this.busy = true;
       try {
         const batch = this.ready ? await wc.executeJavaScript('window.relayReader.take()') : {status:this.status, messages:[]};
@@ -86,7 +87,10 @@ class WebAccount {
         if (!this.disposed && generation === this.generation) update('adapter-error');
       } finally { this.busy = false; }
     }, 1200);
-    this.load();
+    if (prepare) this.preparing = Promise.resolve().then(()=>prepare(this)).catch(()=>{
+      if (!this.disposed) onBatch(this,{status:this.status,messages:[],recoveryError:true});
+    }).finally(()=>{this.preparing=null;if (!this.disposed) this.load();});
+    else this.load();
   }
   // A failed connection is retried on its own: after 5 s, then 15 s, 30 s, 1 min and every 2 min.
   watch(status) {
@@ -103,6 +107,7 @@ class WebAccount {
     }
   }
   load() {
+    if (this.preparing || this.disposed) return;
     this.view.webContents.loadURL(WEB + '/').catch(() => {});
   }
   async pair(phone) {
@@ -149,6 +154,7 @@ class WebAccount {
     this.disposed = true;
     clearTimeout(this.retry);
     clearInterval(this.poll);
+    this.ses.flushStorageData();
     this.view.destroy();
   }
 }

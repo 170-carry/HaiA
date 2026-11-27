@@ -44,10 +44,15 @@ function evict() {
   for (const [key,file] of files) {
     if (total <= CACHE_LIMIT || files.size <= 1) break;
     files.delete(key); total -= file.size;
-    fs.promises.rm(file.path,{force:true}).catch(() => {});
+    if (!file.retained) fs.promises.rm(file.path,{force:true}).catch(() => {});
   }
 }
 async function fetchToDisk(session, message) {
+  const {retained,keep}=require('./history/attachments.cjs');
+  const store=session.historyStore;
+  const cached=await retained(store,message);
+  if (cached) return cached;
+  if (session.account.dropped && session.status!=='online') throw new Error('本机没有保存此附件的原文件');
   if (!message?.media || message.media.once) throw new Error('这条消息没有可下载的文件');
   const owner = session.identity;
   const opened = await session.call('mediaOpen', message.id);
@@ -70,6 +75,7 @@ async function fetchToDisk(session, message) {
     throw error;
   } finally { void session.call('mediaClose', opened.token).catch(() => {}); }
   const mime = String(opened.mime || message.media.mime || '').split(';')[0].trim().toLowerCase();
+  if (store && !session.disposed && session.identity===owner) await keep(store,message,target);
   return {token, path:target, size:opened.size, mime, name:opened.name || message.media.name || ''};
 }
 // Concurrent requests for the same message share one download.

@@ -2,21 +2,14 @@ if (require('./backup/snapshot-worker.cjs').runSnapshotWorker()) return;
 const { app, BrowserWindow, ipcMain, Menu, dialog, systemPreferences, protocol, Tray, nativeImage } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { readPhoto } = require('./profile-photo.cjs');
+const { snapshotPhoto } = require('./history/photos.cjs');
 const { translationRoutes } = require('./translation/service.cjs');
 const { Accounts } = require('./accounts.cjs');
 const { Workspace } = require('./workspace.cjs');
 const { Preferences } = require('./preferences.cjs');
 
-const fs = require('node:fs');
 app.setName('HaiA');
-// Existing users keep their linked sessions and settings in the original profile.
-const legacyProfile = path.join(app.getPath('appData'), 'Relay Desk');
-if (app.getPath('userData') === path.join(app.getPath('appData'), 'HaiA') &&
-    fs.existsSync(path.join(legacyProfile, 'accounts.json'))) {
-  app.setPath('userData', legacyProfile);
-  app.setPath('sessionData', legacyProfile);
-}
+require('./data-directory.cjs').configureDataDirectory(app);
 // Downloaded media is read by the window through this scheme. It has to be declared before the app is ready.
 protocol.registerSchemesAsPrivileged([{scheme:'haia-media',privileges:{stream:true,supportFetchAPI:true}}]);
 app.setAppUserModelId('com.relaydesk.desktop');
@@ -57,11 +50,13 @@ else app.whenReady().then(async () => {
   desk = new Workspace(win, accounts, preferences);
   // Closing the window keeps the accounts connected in the background; quitting the app ends them.
   let quitting = Boolean(process.env.HAIA_TEST), tray;
-  app.on('before-quit', () => { quitting = true; });
+  require('./history/shutdown.cjs').onQuit(app,desk,()=>{quitting=true;});
   app.on('activate', () => { win.show(); win.focus(); });
   win.on('close', event => {
-    if (quitting || !preferences.all.background) return;
-    event.preventDefault(); win.hide();
+    if (quitting) return;
+    event.preventDefault();
+    if (!preferences.all.background) {app.quit();return;}
+    win.hide();
     if (process.platform !== 'darwin' && !tray) {
       tray = new Tray(nativeImage.createFromPath(path.join(__dirname,'../ui/assets/relay-icon.png')).resize({width:16,height:16}));
       tray.setToolTip('HaiA');
@@ -69,18 +64,20 @@ else app.whenReady().then(async () => {
       tray.on('click', () => { win.show(); win.focus(); });
     }
   });
+  const translations=translationRoutes(app.getPath('userData'),require('electron').safeStorage,require('electron').net.fetch.bind(require('electron').net));
   const routes = {
     ...require('./backup/routes.cjs').backupRoutes(desk,app.getPath('userData')),
     ...require('./account-health/routes.cjs').healthRoutes(desk),
     ...require('./group-routes.cjs').groupRoutes(desk),
-    ...translationRoutes(app.getPath('userData'),require('electron').safeStorage,require('electron').net.fetch.bind(require('electron').net)),
+    ...translations, translate:require('./history/translations.cjs').translationCache(translations,desk),
     state: () => desk.snapshot(),
     ...require('./updates/service.cjs').updateRoutes({
       app, fetch:require('electron').net.fetch.bind(require('electron').net),
       notify:state=>{ if(!win.isDestroyed()) win.webContents.send('desk:update-progress',state); },
-      quit:()=>{ quitting=true; desk.close(); app.quit(); }
+      quit:()=>{ quitting=true; app.quit(); }
     }),
-    preferences: () => ({...preferences.all, version:require('../../package.json').version}), savePreferences: patch => desk.savePreferences(patch),
+    openDataDirectory:()=>require('./data-directory.cjs').openDataDirectory(app,require('electron').shell),
+    preferences: () => ({...preferences.all, version:require('../../package.json').version, dataDirectory:app.getPath('userData')}), savePreferences: patch => desk.savePreferences(patch),
     searchHistory: (scope, term, chat) => require('./history-search.cjs').searchHistory(desk,scope,term,chat),
     openHistoryHit: (account, chat, id) => require('./history-search.cjs').openHit(desk,account,chat,id),
     reorder: ids => desk.reorder(ids), searchMessages: (scope, term, starred) => desk.searchMessages(scope, term, starred === true),
@@ -88,7 +85,7 @@ else app.whenReady().then(async () => {
     contacts: (id, term) => desk.contacts(id, term),
     profileInfo: id => desk.profileInfo(id), saveProfile: (id, field, value) => desk.saveProfile(id, field, value),
     sendPath: (id, chat, file, meta) => desk.sendPath(id, chat, file, meta), select: id => desk.select(id), add: name => desk.add(name),
-    photo: (id,who) => readPhoto(desk.sessions.get(id),who).catch(()=>null),
+    photo: (id,who) => snapshotPhoto(desk.sessions.get(id),who).catch(()=>null),
     searchFeed: (scope,term) => desk.searchFeed(scope,term),
     filterUnread: value => desk.filterUnread(value),
     openChat: (account, chat) => desk.openChat(account,chat), searchPeople: term => desk.searchPeople(term),

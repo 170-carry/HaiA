@@ -2,11 +2,12 @@
 window.createRelayIndex = function (latestMessages, format, enqueue) {
   const idOf = value => value?._serialized || value?.toString() || '';
   const isChat = id => /@(c\.us|s\.whatsapp\.net|g\.us|lid)$/.test(id);
-  const unread = new Map(), known = new Map(), queue = new Map(), retry = new Map();
-  let nextScan = 0, busy = false, failed = false, unreadDirty = true, directory = null;
+  const initialChanges = new Map(), unread = new Map(), known = new Map(), queue = new Map(), retry = new Map();
+  let nextScan = 0, busy = false, failed = false, initialized = false, unreadDirty = true, directory = null;
   function updateUnread(id, value) {
     if (!isChat(id)) return;
     const count = value === -1 ? 1 : Math.max(0, Number(value) || 0);
+    if (!initialized) initialChanges.set(id,count);
     if ((unread.get(id) || 0) === count) return;
     if (count) unread.set(id, count); else unread.delete(id);
     unreadDirty = true;
@@ -41,6 +42,7 @@ window.createRelayIndex = function (latestMessages, format, enqueue) {
           if ((retry.get(chat)?.at ?? Infinity) <= Date.now()) queue.set(chat,{model,before:retry.get(chat).before});
           updateUnread(chat, model.unreadCount);
         }
+        initialized = true;
         failed = false;
         nextScan = Date.now() + 15000;
       }
@@ -70,13 +72,15 @@ window.createRelayIndex = function (latestMessages, format, enqueue) {
   }
   return {
     updateUnread, refresh() { nextScan = 0; },
-    take(online) {
-      if (online && (queue.size || Date.now() >= nextScan)) void advance();
+    take(online, refresh = true) {
+      if (online && refresh && (queue.size || Date.now() >= nextScan)) void advance();
       const entries = online ? directory : null;
       if (online) directory = null;
-      const chatUnread = online && unreadDirty ? [...unread] : null;
+      const chatUnread = online && initialized && unreadDirty ? [...unread] : null;
+      const chatUnreadDelta=online && !initialized && initialChanges.size ? [...initialChanges] : null;
+      if (online) initialChanges.clear();
       if (chatUnread) unreadDirty = false;
-      return {directory:entries, chatUnread, unread:[...unread.values()].reduce((a,b)=>a+b,0),
+      return {directory:entries, chatUnread, chatUnreadDelta, unreadReady:initialized, unread:[...unread.values()].reduce((a,b)=>a+b,0),
         more:busy || queue.size > 0 || failed, historyError:failed};
     }
   };

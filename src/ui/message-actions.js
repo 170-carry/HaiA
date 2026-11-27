@@ -33,6 +33,10 @@ const messageActions = (() => {
     menu.replaceChildren(row); place(anchor);
   }
   function openMore(message,anchor) {
+    if (snapshotOf(state?.accounts.find(a=>a.id===message.accountId))) {
+      menu.replaceChildren(item('copy','复制文字',()=>act(()=>navigator.clipboard.writeText(message.text))));
+      place(anchor); return;
+    }
     const items = [item('reply','回复',()=>{ menu.hidePopover(); composerExtras.reply(message); })];
     items.push(item('forward','转发',()=>{ menu.hidePopover(); forwardPicker.open(message); }));
     items.push(item('star',message.starred ? '取消星标' : '星标',()=>act(()=>api.star(message.accountId,message.chat,message.id,!message.starred))));
@@ -92,7 +96,7 @@ const messageActions = (() => {
     const url = event.target.closest('.text-link')?.dataset.url;
     if (url) { run(()=>api.openExternal(url)); return; }
     const tool = event.target.closest('[data-act]'), chip = event.target.closest('.reactions button'), quote = event.target.closest('.quote');
-    if (chip) react(message,chip.dataset.emoji);
+    if (chip && !snapshotOf(state?.accounts.find(a=>a.id===message.accountId))) react(message,chip.dataset.emoji);
     else if (quote) {
       const origin = get('bubbles').querySelector('[data-stanza="'+CSS.escape(message.quote.id)+'"]');
       if (!origin) { warning('被引用的消息尚未加载'); return; }

@@ -625,7 +625,7 @@ async function until(fn) {
     await call('openChat',me,'demo@c.us');
     await until(()=>ui("state.thread?.chat==='demo@c.us' && !!document.querySelector('.unread-divider') && /未读消息 0|正在看的会话里的新消息/.test(document.querySelector('.unread-divider').nextElementSibling.textContent)"));
     await until(()=>ui("[...document.querySelectorAll('#list .row')].find(r=>JSON.parse(r.dataset.message)[1]==="+JSON.stringify(G)+")?.querySelector('.snippet').textContent==='草稿：草稿内容待发'"));
-    await until(()=>ui("JSON.parse(localStorage.getItem('drafts') || '[]').some(([key,text])=>text==='草稿内容待发')"));
+    await until(()=>ui("composerDisk.get('text',"+JSON.stringify(JSON.stringify([me,G]))+").then(text=>text==='草稿内容待发')"));
     await ui("get('scroll').scrollTop=0;get('scroll').dispatchEvent(new Event('scroll'))");
     await a.executeJavaScript("sample('滚动时到达的消息','jump-probe');true");
     await until(()=>ui("!get('jump-bottom').hidden && get('jump-count').textContent==='1'"));
@@ -705,6 +705,7 @@ async function until(fn) {
     await call('reorder',[me,accounts[1].id]);
     await ui("get('open-settings').click()");
     await until(()=>ui("get('settings-dialog').open && get('template-list').textContent.includes('发货说明') && document.querySelector('[data-pref=notify]').checked && get('settings-version').textContent.startsWith('HaiA ')"));
+    assert.equal(await ui("get('local-data-path').textContent"),dir);
     await ui("get('check-update').click()");
     await until(()=>ui("get('update-status').textContent.includes('0.10.0') && !get('update-download').hidden"));
     await ui("get('update-download').click()");
@@ -878,12 +879,15 @@ async function until(fn) {
     console.log('PASS: group authors, group activity, read receipts, emoji, bilingual fallback and draft preview');
     console.log('PASS: late directory rows without previews, unread counts and private number search');
     console.log('PASS: two isolated accounts, unified feed, notification routing, own UI reply');
+    await a.executeJavaScript("sample('退出前最后到达的正文','final-shutdown-message');true");
   } else {
     assert.equal(await a.executeJavaScript('localStorage.owner'),'one');
     assert.equal(await b.executeJavaScript('localStorage.owner'),'two');
-    console.log('PASS: persisted partitions reopened independently after process restart');
+    const saved=await call('searchMessages',accounts[0].id,'退出前最后到达的正文',false);
+    assert.equal(saved[0]?.id,'final-shutdown-message');
+    console.log('PASS: persisted partitions and final received body reopened after process restart');
   }
   await Promise.all([a.session.flushStorageData(),b.session.flushStorageData()]);
   completeTest();
-  BrowserWindow.fromWebContents(shell).close();
+  app.quit();
 })().catch(err=>{console.error(err);app.exit(1);});

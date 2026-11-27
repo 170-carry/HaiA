@@ -80,6 +80,7 @@ function backupRoutes(desk,dir) {
       progress('正在校验并恢复备份…');
       await unpack(pendingFile,staging,path.join(temp,'payload.tar'),pass);
       const result=await restoreSelection(desk,root,await readSelection(temp,staging));
+      for (const archive of result) await require('../history/recovery.cjs').importArchive(desk,dir,archive);
       pendingFile=null;return result;
     }),
     backupList:async id=>(await versions(id)).map(({meta:m})=>({key:m.id,time:m.time,name:m.name,phone:m.phone,chats:m.chats,missing:m.missingAttachments,pending:m.missingBodies})),

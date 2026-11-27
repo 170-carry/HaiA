@@ -37,3 +37,10 @@
   #reader-head { padding-inline:9px; gap:5px; }
 }
 #chat-empty { text-align:center; color:var(--muted); margin:30px auto; }
+
+#snapshot-banner{display:flex;align-items:center;gap:9px;flex:none;padding:9px 16px;color:var(--ink);background:var(--active);border-bottom:1px solid var(--line);font-size:13px}
+#snapshot-banner span{flex:1}
+#snapshot-relink{color:var(--accent);font-weight:600}
+.status-dot.dropped{background:var(--danger)}
+.snapshot-mode .message-tools button:not([data-act="more"]){display:none}
+.snapshot-mode .reactions button{pointer-events:none}

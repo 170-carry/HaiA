@@ -4,6 +4,13 @@ const composerExtras = (() => {
   let quoted = null, editing = null, files = [], typedAt = 0;
   // Reply target and attachments wait here while another conversation is open.
   const parked = new Map();
+  let change=0;
+  function save(key=route,items=files,reply=quoted) {
+    change++;
+    if (!key) return;
+    const value=reply || items.length ? {quoted:reply,files:items.map(({file,name,size})=>({file,name,size}))} : null;
+    return composerDisk.write('extras',key,value);
+  }
   const release = list => { for (const item of list) if (item.url) URL.revokeObjectURL(item.url); };
   function draw() {
     const subject = editing || quoted;
@@ -21,14 +28,14 @@ const composerExtras = (() => {
       words.append(el('strong','',file.name),el('small','',messageMedia.size(file.size)));
       const remove = el('button','icon-button');
       remove.type = 'button'; remove.title = '移除附件'; remove.setAttribute('aria-label','移除附件 '+file.name);
-      remove.append(icon('close')); remove.onclick = () => { release([file]); files = files.filter(f=>f !== file); draw(); refresh(); };
+      remove.append(icon('close')); remove.onclick = () => { release([file]); files = files.filter(f=>f !== file); save(); draw(); refresh(); };
       chip.append(words,remove);
       return chip;
     }));
     get('attach').disabled = !!editing;
   }
   function refresh() { get('reply').dispatchEvent(new Event('input')); }
-  function clear() { release(files); quoted = editing = null; files = []; typedAt = 0; draw(); }
+  function clear() { release(files); quoted = editing = null; files = []; typedAt = 0; save(); draw(); }
   // Leaving a conversation ends an edit without keeping its text as a draft, and parks the reply target and attachments.
   function leave(key) {
     if (editing) get('reply').value = '';
@@ -39,6 +46,13 @@ const composerExtras = (() => {
   function enter(key) {
     const kept = parked.get(key);
     parked.delete(key);
+    const ticket=++change;
+    if(!kept) composerDisk.get('extras',key).then(value=>{
+      if (!value || route!==key || ticket!==change) return;
+      quoted=value.quoted;
+      files=value.files.map(item=>({...item,type:item.file.type,url:item.file.type.startsWith('image/')?URL.createObjectURL(item.file):null}));
+      draw();get('send').disabled=!canSend(state?.accounts.find(a=>a.id===state.active));
+    }).catch(()=>warning('读取待发送附件失败'));
     quoted = kept?.quoted || null; files = kept?.files || []; editing = null; draw();
   }
   async function sendOne(account, chat, item, meta) {
@@ -57,19 +71,24 @@ const composerExtras = (() => {
     const batch = files;
     let done = 0, error = null;
     try {
-      for (const [at,item] of batch.entries()) { await sendOne(account,chat,item,{caption:at ? '' : text,mentions:at ? [] : mentions,quote:at ? null : reply?.id || null}); done++; }
+      for (const [at,item] of batch.entries()) {
+        await sendOne(account,chat,item,{caption:at ? '' : text,mentions:at ? [] : mentions,quote:at ? null : reply?.id || null});
+        done++;
+        await save(key,batch.slice(done),null);
+      }
     } catch (reason) { error = reason; }
     release(batch.slice(0,done));
     const rest = batch.slice(done), keepReply = done ? null : reply;
     if (route === key) { files = rest; if (done) quoted = null; draw(); }
     else if (rest.length || keepReply) parked.set(key,{quoted:keepReply,files:rest});
     else parked.delete(key);
+    save(key,rest,keepReply);
     if (error && done) error = new Error('已发送 '+done+' 个，剩余 '+rest.length+' 个未发送：'+translationError(error));
     return {done,error};
   }
-  function reply(message) { editing = null; quoted = message; draw(); get('reply').focus(); }
+  function reply(message) { editing = null; quoted = message; save(); draw(); get('reply').focus(); }
   function edit(message) {
-    quoted = null; files = []; editing = message; draw();
+    quoted = null; release(files); files = []; editing = message; save(); draw();
     get('reply').value = message.text; refresh(); get('reply').focus();
   }
   function add(list) {
@@ -80,10 +99,10 @@ const composerExtras = (() => {
       if (!file.size) continue;
       files.push({file, name:file.name || '粘贴的图片.png', size:file.size, type:file.type, url:file.type.startsWith('image/') ? URL.createObjectURL(file) : ''});
     }
-    draw(); refresh(); get('reply').focus();
+    save(); draw(); refresh(); get('reply').focus();
   }
   picker.onchange = () => { add([...picker.files]); picker.value = ''; };
-  get('context-close').onclick = () => { const wasEditing = editing; quoted = editing = null; draw(); if (wasEditing) { get('reply').value = ''; refresh(); } };
+  get('context-close').onclick = () => { const wasEditing = editing; quoted = editing = null; save(); draw(); if (wasEditing) { get('reply').value = ''; refresh(); } };
   get('reply').addEventListener('paste',event => {
     const pasted = [...event.clipboardData?.files || []];
     if (pasted.length) { event.preventDefault(); add(pasted); }

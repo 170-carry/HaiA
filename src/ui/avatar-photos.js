@@ -47,7 +47,7 @@ const avatarPhotos = (() => {
     return node;
   }
   return {face, setAccounts(items) {
-    accounts = new Map(items.filter(a=>a.status==='online').map(a=>[a.id,a.photoIdentity]));
+    accounts = new Map(items.filter(a=>a.status==='online' || a.dropped).map(a=>[a.id,a.photoIdentity]));
   }, forget(accountId, who) {
     // After the picture was changed, the stored copy is dropped so the next draw reads the new one.
     for (const key of [...cache.keys()]) { const [account,,person] = JSON.parse(key); if (account === accountId && (!who || person === who)) cache.delete(key); }

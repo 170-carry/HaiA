@@ -12,7 +12,7 @@ window.createHistorySearch = format => ({
       try { model = WPP.chat.get(chat); } catch { /* Archived chats can still have indexed messages. */ }
       const row = format(msg,model,false);
       if (!row || row.pendingText || row.system || row.type === 'revoked') return [];
-      return [{id:row.id,chat,title:row.title,text:row.text,sender:row.sender,time:row.time,outgoing:row.outgoing,starred:row.starred}];
+      return [row];
     });
   },
   async historyHit(chat,id) {

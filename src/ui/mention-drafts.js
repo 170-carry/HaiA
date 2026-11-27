@@ -1,11 +1,8 @@
 // Keep the selected participant's identity separate from the text visible in the composer.
 const mentionDrafts = (() => {
-  let entries;
-  try { entries = new Map(JSON.parse(localStorage.getItem('mention-drafts') || '[]')); }
-  catch { entries = new Map(); }
-  function save() {
-    try { localStorage.setItem('mention-drafts',JSON.stringify([...entries].slice(-200))); } catch { /* The current draft is still in memory. */ }
-  }
+  const entries=new Map();
+  const ready=composerDisk.load('mentions','mention-drafts',entries);
+  const save=key=>composerDisk.write('mentions',key,entries.get(key));
   function sync(key,text) {
     const draft = entries.get(key);
     if (!draft || draft.text === text) return draft;
@@ -19,16 +16,17 @@ const mentionDrafts = (() => {
       span.start += text.length-old.length; return true;
     });
     if (spans.length) entries.set(key,{text,spans}); else entries.delete(key);
-    save(); return entries.get(key);
+    save(key); return entries.get(key);
   }
-  return {sync, add(key,text,start,label,id) {
+  function forget(id) { for(const key of entries.keys()) if(key.startsWith('['+JSON.stringify(id)+',')) entries.delete(key); }
+  return {ready,forget,sync, add(key,text,start,label,id) {
     const spans = sync(key,text)?.spans || [];
     spans.push({start,label,id}); spans.sort((a,b)=>a.start-b.start);
-    entries.set(key,{text,spans}); save();
+    entries.set(key,{text,spans}); save(key);
   }, encode(key,text) {
     const spans = sync(key,text)?.spans || [];
     let wire = text;
     for (const span of [...spans].reverse()) wire = wire.slice(0,span.start)+'@'+span.id.split('@')[0]+wire.slice(span.start+span.label.length);
     return {text:wire,ids:[...new Set(spans.map(span=>span.id))]};
-  }, clear(key) { if (entries.delete(key)) save(); }};
+  }, clear(key) { if (entries.delete(key)) save(key); }};
 })();

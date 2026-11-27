@@ -25,8 +25,9 @@ class Accounts {
   update(id, patch) {
     const item = this.items.find(entry => entry.id === id);
     if (!item) return;
-    Object.assign(item, patch);
-    this.save(this.items);
+    this.save(this.items.map(account=>account===item ? {...item,...patch} : account));
+    Object.assign(item,patch);
+    this.items[this.items.findIndex(account=>account.id===id)]=item;
   }
   reorder(ids) {
     const order = new Map(ids.map((id,index) => [id,index]));

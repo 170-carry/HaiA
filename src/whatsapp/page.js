@@ -1,7 +1,7 @@
 // Runs inside the user's linked WhatsApp Web page. No Electron or filesystem APIs.
 (() => {
   if (window.relayReader) return;
-  let pending = [], changes = [], logoutReason = '';
+  let pending = [], changes = [], logoutReason = '', finalHistory = null;
   const presence = new Map();
   const receipts = new Map();
   let identity = '';
@@ -46,6 +46,7 @@
     sticker: '贴纸', location: '位置', vcard: '联系人', multi_vcard: '联系人', revoked: '消息已撤回', poll_creation: '投票', call_log:'通话记录', gp2:'群通知', notification_template:'系统通知', notification:'系统通知', e2e_notification:'加密通知', protocol:'系统通知', reaction:'表情回应', buttons_response:'按钮回复', list_response:'列表回复' };
 
   function reset(nextIdentity) {
+    if (identity) finalHistory = {identity,messages:pending,changes,acknowledgements:[...receipts],...index.take(true,false)};
     pending = []; changes = []; receipts.clear(); presence.clear(); window.relayMore.calls.reset();
     index = newIndex();
     recovery = newRecovery();
@@ -68,7 +69,7 @@
     const previewable = !pendingText && typeof text === 'string' && Boolean(text.trim()) &&
       (textMessage || Boolean(msg.caption || msg.filename) || (!system && Boolean(labels[msg.type])) || msg.type === 'gp2');
     return { mentions:mention.names, mentionsMe:mention.me, ephemeral:Number(msg.ephemeralDuration) || 0, link:window.relayMore.link(msg), poll:window.relayMore.poll(msg), starred:Boolean(msg.star), media:window.relayExtras.media(msg), quote:window.relayExtras.quote(msg), edited:Boolean(msg.latestEditMsgKey), forwarded:Boolean(msg.isForwarded),
-      ack:Number.isInteger(msg.ack) ? msg.ack : null, system, previewable, type:msg.type, subtype:msg.subtype, translatable:!pendingText && !system && Boolean(['chat','text'].includes(msg.type) ? msg.body : msg.caption), id, rowId:Number.isSafeInteger(msg.rowId) ? msg.rowId : null, chat: remote, title, sender: groupSender?.name || msg.notifyName || msg.author?.user || '', text: String((mention.names.length ? mention.text : text) || '').slice(0, 65536), time: msg.t * 1000,
+      ack:Number.isInteger(msg.ack) ? msg.ack : null, system, previewable, type:msg.type, subtype:msg.subtype, translatable:!pendingText && !system && Boolean(['chat','text'].includes(msg.type) ? msg.body : msg.caption), id, rowId:Number.isSafeInteger(msg.rowId) ? msg.rowId : null, chat: remote, title, sender: groupSender?.name || msg.notifyName || msg.author?.user || '', text: String((mention.names.length ? mention.text : text) || ''), originalText:(textMessage || ['vcard','buttons_response','list_response'].includes(msg.type)) ? msg.body : msg.caption, time: msg.t * 1000,
       senderId: groupSender?.id || msg.author?._serialized || msg.author?.toString() || null, pendingText, outgoing: !!msg.id.fromMe, live, latestInChat: id === chat?.lastReceivedKey?._serialized, notify: live && !system && !pendingText && !msg.id.fromMe && !chat?.isMuted && !(mute === -1 || mute > Date.now()/1000) };
   }
   WPP.loader.onReady(() => {
@@ -129,7 +130,7 @@
   window.relayReader = {
     ...window.createHistorySearch(format),
     ...window.createAccountBackupReader(format),
-    take() {
+    take(draining = false) {
       let status = 'loading';
       if (loaderReady) {
         if (WPP.conn.isAuthenticated()) {
@@ -145,7 +146,7 @@
         }
       } else if (document.querySelector('canvas, [data-ref]')) status = 'pair';
       const messages = status === 'online' ? pending.splice(0, 250) : [];
-      if (status === 'online') {
+      if (status === 'online' && !draining) {
         for (const row of messages) recovery.observe(row);
         void recovery.tick();
       }
@@ -155,7 +156,8 @@
       let historySync = null;
       try { const sync = WPP.conn.getHistorySyncProgress?.(); // On a linked account this flag can stay set at 0 % long after linking, so only real progress is reported.
         if (sync?.inProgress && sync.progress > 0 && sync.progress < 100) historySync = {progress:Number.isFinite(sync.progress) ? Math.round(sync.progress) : null, paused:Boolean(sync.paused)}; } catch { /* Not available on this build. */ }
-      return { historySync, restriction:status === 'online' ? window.relayLimits.take() : null, call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online') };
+      const lastBatch=finalHistory;finalHistory=null;
+      return { lastBatch, historySync, restriction:status === 'online' ? window.relayLimits.take() : null, call:window.relayMore.calls.take(), logout:logoutReason, status, identity, messages, acknowledgements, changes:updates, presence:typing, link: window.relayPairing.status(), ...index.take(status === 'online',!draining) };
     },
     listGroups:window.relayGroupTools.list, groupInfo:window.relayGroupTools.info, saveGroup:window.relayGroupTools.save, groupInvite:window.relayGroupTools.invite,
     more() { index.refresh(); },

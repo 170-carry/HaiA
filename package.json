@@ -1,7 +1,7 @@
 {
   "name": "haia",
   "productName": "HaiA",
-  "version": "0.9.15",
+  "version": "0.9.16",
   "description": "A local multi-account WhatsApp desktop inbox",
   "author": "HaiA",
   "private": true,
@@ -13,7 +13,7 @@
   "main": "src/main/app.cjs",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.cjs",
+    "test": "node scripts/test.cjs",
     "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
     "update:manifest": "node scripts/sign-update.cjs"
